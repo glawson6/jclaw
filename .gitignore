@@ -1,0 +1,7 @@
+target/
+.idea/
+*.iml
+CLAUDE.md
+docker-compose/.env
+*.log
+hs_err_pid*
