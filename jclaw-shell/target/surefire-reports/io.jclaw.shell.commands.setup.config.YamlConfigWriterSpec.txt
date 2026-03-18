@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: io.jclaw.shell.commands.setup.config.YamlConfigWriterSpec
--------------------------------------------------------------------------------
-Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.019 s -- in io.jclaw.shell.commands.setup.config.YamlConfigWriterSpec

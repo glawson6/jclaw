@@ -1,7 +1,9 @@
 target/
 .idea/
 *.iml
+*.class
 CLAUDE.md
 docker-compose/.env
 *.log
 hs_err_pid*
+META-INF/

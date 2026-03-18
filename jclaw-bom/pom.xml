@@ -51,7 +51,67 @@
             </dependency>
             <dependency>
                 <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-gateway</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-telegram</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-slack</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-discord</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-email</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-sms</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-documents</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-media</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-audit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
                 <artifactId>jclaw-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-gateway-app</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

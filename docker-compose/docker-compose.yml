@@ -5,10 +5,15 @@ services:
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
-      # LLM providers (set at least one, or use Ollama alone)
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL: http://ollama:11434
+      # LLM provider selection (anthropic, openai, or ollama)
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
+      ANTHROPIC_ENABLED: ${ANTHROPIC_ENABLED:-true}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-set}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-false}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
 
       # Channel adapters (all optional)
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -19,9 +24,6 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
       DISCORD_USE_GATEWAY: ${DISCORD_USE_GATEWAY:-}
-    depends_on:
-      ollama:
-        condition: service_started
     restart: unless-stopped
 
   ollama:
@@ -31,6 +33,8 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     restart: unless-stopped
+    profiles:
+      - ollama
 
 volumes:
   ollama-data:

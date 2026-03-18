@@ -355,6 +355,103 @@ env:
 
 ---
 
+## Auto-Configuration Bean Ordering
+
+The starter splits auto-configuration across three `@AutoConfiguration` classes to guarantee correct `@ConditionalOnBean` evaluation order. Spring Boot evaluates conditions on nested `@Configuration` classes in the same pass as the enclosing auto-config, so `@ConditionalOnBean` only works reliably **across separate** auto-configuration classes linked by `@AutoConfigureAfter`.
+
+### Phase 1 — Spring AI Provider Auto-Configs
+
+These are provided by Spring AI starter dependencies. Only the **enabled** provider activates (controlled by `spring.ai.*.enabled` properties).
+
+```
+AnthropicChatAutoConfiguration        ─── creates ──→  ChatModel (Anthropic)
+   or
+OpenAiChatAutoConfiguration           ─── creates ──→  ChatModel (OpenAI)
+   or
+OllamaChatAutoConfiguration           ─── creates ──→  ChatModel (Ollama)
+          │
+          ▼
+ChatClientAutoConfiguration           ─── creates ──→  ChatClient.Builder
+  @ConditionalOnClass(ChatClient)                       (requires ChatModel)
+```
+
+### Phase 2 — JClawAutoConfiguration
+
+`@AutoConfigureAfter(ChatClientAutoConfiguration)` — core JClaw beans.
+
+```
+JClawAutoConfiguration
+  │
+  ├── toolRegistry            ToolRegistry (+ built-in tools)
+  ├── sessionManager          SessionManager
+  ├── skillLoader             SkillLoader (loads bundled skills from classpath)
+  ├── pluginRegistry          PluginRegistry
+  ├── vectorStoreSearchManager  VectorStoreSearchManager  @ConditionalOnBean(VectorStore)
+  │     or
+  ├── inMemorySearchManager   InMemorySearchManager       (fallback)
+  ├── agentRuntime            AgentRuntime                @ConditionalOnBean(ChatClient.Builder)
+  │                             (SessionManager, ChatClient.Builder, ToolRegistry, SkillLoader)
+  ├── channelRegistry         ChannelRegistry             (auto-collects all ChannelAdapter beans)
+  └── noOpOrchestrationPort   NoOpOrchestrationPort       @ConditionalOnMissingBean(AgentOrchestrationPort)
+```
+
+### Phase 3 — JClawGatewayAutoConfiguration
+
+`@AutoConfigureAfter(JClawAutoConfiguration)` — gateway HTTP/WS layer. Entire class is gated on:
+- `@ConditionalOnClass(GatewayService)` — `jclaw-gateway` must be on the classpath
+- `@ConditionalOnBean(AgentRuntime)` — an LLM provider must be configured
+
+```
+JClawGatewayAutoConfiguration
+  │
+  ├── webhookDispatcher       WebhookDispatcher
+  ├── jwtTenantResolver       JwtTenantResolver
+  ├── botTokenTenantResolver  BotTokenTenantResolver
+  ├── compositeTenantResolver CompositeTenantResolver     (aggregates all TenantResolvers)
+  ├── loggingAttachmentRouter LoggingAttachmentRouter      @ConditionalOnMissingBean(AttachmentRouter)
+  ├── gatewayService          GatewayService               (AgentRuntime, SessionManager, ChannelRegistry, ...)
+  ├── gatewayLifecycle        GatewayLifecycle             (starts/stops channel adapters on app lifecycle)
+  ├── gatewayController       GatewayController            @RestController — /api/chat, /api/health, /webhook/*
+  ├── webSocketSessionHandler WebSocketSessionHandler      (WS /ws/session/{id})
+  ├── mcpServerRegistry       McpServerRegistry            (collects McpToolProvider beans)
+  ├── mcpController           McpController                @ConditionalOnBean(McpServerRegistry) — /mcp/*
+  ├── gatewayMetrics          GatewayMetrics               (atomic request/error counters)
+  └── gatewayHealthIndicator  GatewayHealthIndicator       (UP/DEGRADED based on channel adapter status)
+```
+
+### Phase 4 — JClawChannelAutoConfiguration
+
+`@AutoConfigureAfter(JClawGatewayAutoConfiguration)` — channel adapters. Each adapter is in a nested `@Configuration` gated on `@ConditionalOnClass` (adapter JAR on classpath) and `@ConditionalOnBean(WebhookDispatcher)` (gateway must be active).
+
+```
+JClawChannelAutoConfiguration
+  │
+  ├── TelegramAutoConfiguration   ─── creates ──→  TelegramAdapter     @ConditionalOnClass + @ConditionalOnBean(WebhookDispatcher)
+  ├── SlackAutoConfiguration      ─── creates ──→  SlackAdapter         @ConditionalOnClass + @ConditionalOnBean(WebhookDispatcher)
+  ├── DiscordAutoConfiguration    ─── creates ──→  DiscordAdapter       @ConditionalOnClass + @ConditionalOnBean(WebhookDispatcher)
+  ├── EmailAutoConfiguration      ─── creates ──→  EmailAdapter         @ConditionalOnClass (no WebhookDispatcher needed)
+  ├── SmsAutoConfiguration        ─── creates ──→  SmsAdapter           @ConditionalOnClass (no WebhookDispatcher needed)
+  └── AuditAutoConfiguration      ─── creates ──→  InMemoryAuditLogger  @ConditionalOnClass(AuditLogger)
+```
+
+### Complete Bean Dependency Chain
+
+```
+ChatModel (Spring AI)
+  └─→ ChatClient.Builder (Spring AI)
+        └─→ AgentRuntime (Phase 2)
+              └─→ GatewayService (Phase 3)
+                    ├─→ GatewayController   (/api/chat, /api/health, /webhook/*)
+                    ├─→ GatewayLifecycle    (starts channel adapters)
+                    └─→ WebSocketSessionHandler (/ws/session/{id})
+```
+
+### Why Three Separate Auto-Configs?
+
+`@ConditionalOnBean` only checks for beans that are already **defined** at evaluation time. Within a single `@AutoConfiguration` class, nested `@Configuration` classes are evaluated in the same pass — so a nested class cannot reliably `@ConditionalOnBean` a bean defined by the enclosing class or a sibling nested class. Splitting into separate `@AutoConfiguration` classes with `@AutoConfigureAfter` guarantees that each phase's beans are fully defined before the next phase's conditions are evaluated.
+
+---
+
 ## Configuration
 
 ### application.yml (gateway profile)

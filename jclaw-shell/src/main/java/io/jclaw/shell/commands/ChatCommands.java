@@ -9,7 +9,7 @@ import io.jclaw.core.model.Message;
 import io.jclaw.core.model.Session;
 import io.jclaw.core.model.UserMessage;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -18,27 +18,31 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 @ShellComponent
-@ConditionalOnBean(AgentRuntime.class)
 public class ChatCommands {
 
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
     private static final int MESSAGE_TRUNCATE_LENGTH = 120;
 
-    private final AgentRuntime agentRuntime;
+    private final ObjectProvider<AgentRuntime> agentRuntimeProvider;
     private final SessionManager sessionManager;
     private final JClawProperties properties;
     private String currentSessionKey = "default";
 
-    public ChatCommands(AgentRuntime agentRuntime, SessionManager sessionManager,
+    public ChatCommands(ObjectProvider<AgentRuntime> agentRuntimeProvider, SessionManager sessionManager,
                         JClawProperties properties) {
-        this.agentRuntime = agentRuntime;
+        this.agentRuntimeProvider = agentRuntimeProvider;
         this.sessionManager = sessionManager;
         this.properties = properties;
     }
 
     @ShellMethod(key = "chat", value = "Send a message to the agent")
     public String chat(@ShellOption(help = "Your message") String message) {
+        AgentRuntime agentRuntime = agentRuntimeProvider.getIfAvailable();
+        if (agentRuntime == null) {
+            return "No LLM configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or enable Ollama.";
+        }
+
         var agentId = properties.agent().defaultAgent();
         var session = sessionManager.getOrCreate(currentSessionKey, agentId);
         var context = new AgentRuntimeContext(agentId, currentSessionKey, session);

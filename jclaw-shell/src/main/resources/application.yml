@@ -8,10 +8,6 @@ jclaw:
       default:
         id: default
         name: Default Agent
-        model:
-          primary: gpt-4o
-          fallbacks:
-            - gpt-4o-mini
         tools:
           profile: coding
   tools:
@@ -27,13 +23,24 @@ spring:
     web-application-type: none
   config:
     import: optional:file:${user.home}/.jclaw/application-local.yml
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
   ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
     openai:
-      api-key: ${OPENAI_API_KEY:#{null}}
+      enabled: ${OPENAI_ENABLED:false}
+      api-key: ${OPENAI_API_KEY:not-set}
     anthropic:
-      api-key: ${ANTHROPIC_API_KEY:#{null}}
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
     ollama:
-      base-url: ${OLLAMA_BASE_URL:#{null}}
+      enabled: ${OLLAMA_ENABLED:false}
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
   shell:
     interactive:
       enabled: true

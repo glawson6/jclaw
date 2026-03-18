@@ -7,11 +7,15 @@ import io.jclaw.config.JClawProperties
 import io.jclaw.core.model.AssistantMessage
 import io.jclaw.core.model.Session
 import io.jclaw.core.model.UserMessage
+import org.springframework.beans.factory.ObjectProvider
 import spock.lang.Specification
 
 class ChatCommandsSpec extends Specification {
 
     AgentRuntime agentRuntime = Mock()
+    ObjectProvider<AgentRuntime> agentRuntimeProvider = Mock() {
+        getIfAvailable() >> agentRuntime
+    }
     SessionManager sessionManager = new SessionManager()
     JClawProperties properties = Mock() {
         agent() >> Mock(AgentProperties) {
@@ -19,7 +23,7 @@ class ChatCommandsSpec extends Specification {
         }
     }
 
-    ChatCommands commands = new ChatCommands(agentRuntime, sessionManager, properties)
+    ChatCommands commands = new ChatCommands(agentRuntimeProvider, sessionManager, properties)
 
     def "sessions returns no sessions message when empty"() {
         expect:

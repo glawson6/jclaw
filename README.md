@@ -14,7 +14,25 @@ cd jclaw
 ./quickstart.sh
 ```
 
-This builds the Docker image, starts the gateway + Ollama, and pulls a local LLM model. No Java installation needed — Docker handles everything. Test with:
+This builds the Docker image and starts the gateway. If no API key is provided, it also starts Ollama and pulls a local LLM model (~3GB download).
+
+To skip Ollama and use a cloud LLM provider instead:
+
+```bash
+# With Anthropic
+ANTHROPIC_API_KEY=sk-ant-... ./quickstart.sh
+
+# With OpenAI
+OPENAI_API_KEY=sk-... ./quickstart.sh
+```
+
+To pre-pull the Ollama image in the background while the quickstart runs:
+
+```bash
+docker pull ollama/ollama:latest
+```
+
+Test with:
 
 ```bash
 curl -X POST http://localhost:8080/api/chat \
@@ -22,7 +40,31 @@ curl -X POST http://localhost:8080/api/chat \
   -d '{"content": "hello"}'
 ```
 
-### Option 2: From Source (for developers)
+### Option 2: start.sh (recommended for daily use)
+
+After the initial build, use `start.sh` to run the gateway or interactive shell. It loads API keys from `docker-compose/.env` automatically.
+
+```bash
+# Edit API keys (one time)
+vi docker-compose/.env
+
+# Start the gateway (Docker) — tails logs automatically
+./start.sh
+
+# Start the interactive CLI shell (local Java)
+./start.sh shell
+
+# Start gateway locally without Docker
+./start.sh local
+
+# Stop the Docker stack
+./start.sh stop
+
+# Tail gateway logs
+./start.sh logs
+```
+
+### Option 3: setup.sh (first-time developer setup)
 
 ```bash
 git clone https://github.com/jclaw/jclaw.git
@@ -36,45 +78,40 @@ The setup script installs Java 21 via SDKMAN (if needed), builds all modules, an
 jclaw> onboard
 ```
 
-Or skip the wizard and pass API keys directly:
+Or run the gateway instead:
 
 ```bash
-# Ollama (free, local — install with: brew install ollama && ollama serve && ollama pull llama3.2)
-./mvnw spring-boot:run -pl jclaw-shell
-
-# OpenAI
-OPENAI_API_KEY=sk-... ./mvnw spring-boot:run -pl jclaw-shell
-
-# Anthropic
-ANTHROPIC_API_KEY=sk-ant-... ./mvnw spring-boot:run -pl jclaw-shell
+./setup.sh --gateway
 ```
-
-### Option 3: JBang (coming soon)
-
-Once JClaw is published to Maven Central:
-
-```bash
-# Install JBang: curl -Ls https://sh.jbang.dev | bash
-jbang shell@jclaw     # interactive shell
-jbang gateway@jclaw   # gateway server
-```
-
-JBang auto-downloads Java 21 — zero prerequisites besides JBang itself.
 
 ## Running the Gateway (REST API + Channels)
 
 For HTTP/WebSocket access or to connect messaging channels:
 
 ```bash
-OPENAI_API_KEY=sk-... ./mvnw spring-boot:run -pl jclaw-gateway-app
+./start.sh           # Docker (reads docker-compose/.env)
+./start.sh local     # local Java (reads docker-compose/.env)
+```
+
+Or with environment variables directly:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... ./mvnw spring-boot:run -pl jclaw-gateway-app
 ```
 
 Test with curl:
 
 ```bash
+# Chat
 curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"content": "hello"}'
+
+# Health check
+curl http://localhost:8080/api/health
+
+# List channels
+curl http://localhost:8080/api/channels
 ```
 
 ### Connecting Channels
@@ -89,77 +126,70 @@ All messaging channels support a **local dev mode** that requires no public endp
 | Email    | IMAP polling        | ~3 min     |
 | SMS      | Twilio webhook      | ~5 min     |
 
+Add channel tokens to `docker-compose/.env` and restart, or pass as environment variables:
+
 ```bash
 # Telegram (polling mode — no webhook needed)
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF... \
-OPENAI_API_KEY=sk-... \
+ANTHROPIC_API_KEY=sk-ant-... \
 ./mvnw spring-boot:run -pl jclaw-gateway-app
 
 # Slack (Socket Mode — no webhook needed)
 SLACK_BOT_TOKEN=xoxb-... \
 SLACK_APP_TOKEN=xapp-... \
-OPENAI_API_KEY=sk-... \
+ANTHROPIC_API_KEY=sk-ant-... \
 ./mvnw spring-boot:run -pl jclaw-gateway-app
 
 # Discord (Gateway mode — no webhook needed)
 DISCORD_BOT_TOKEN=... \
 DISCORD_USE_GATEWAY=true \
-OPENAI_API_KEY=sk-... \
-./mvnw spring-boot:run -pl jclaw-gateway-app
-
-# Email (IMAP polling + SMTP outbound)
-EMAIL_IMAP_HOST=imap.gmail.com \
-EMAIL_SMTP_HOST=smtp.gmail.com \
-EMAIL_USERNAME=you@gmail.com \
-EMAIL_PASSWORD=app-password \
-OPENAI_API_KEY=sk-... \
-./mvnw spring-boot:run -pl jclaw-gateway-app
-
-# SMS (Twilio)
-TWILIO_ACCOUNT_SID=AC... \
-TWILIO_AUTH_TOKEN=... \
-TWILIO_FROM_NUMBER=+15551234567 \
-OPENAI_API_KEY=sk-... \
+ANTHROPIC_API_KEY=sk-ant-... \
 ./mvnw spring-boot:run -pl jclaw-gateway-app
 ```
 
-See [docs/OPERATIONS.md](docs/OPERATIONS.md) for full channel setup instructions including production webhook configuration.
+See [docs/OPERATIONS.md](docs/OPERATIONS.md) for full channel setup instructions including Email, SMS, and production webhook configuration.
 
-## Running Multiple Instances
+## Running the Interactive Shell
 
-Each JClaw instance stores its config in a **config directory** (default: `~/.jclaw/`). To run multiple independent instances, point each one to a different config directory using the `JCLAW_HOME` environment variable:
+The shell provides a Spring Shell CLI for chatting with the agent directly in your terminal.
 
 ```bash
-# Instance 1: personal assistant with OpenAI
-JCLAW_HOME=~/.jclaw-personal ./mvnw spring-boot:run -pl jclaw-shell
-# In shell: onboard → configure OpenAI + Telegram
-
-# Instance 2: work assistant with Anthropic
-JCLAW_HOME=~/.jclaw-work ./mvnw spring-boot:run -pl jclaw-shell
-# In shell: onboard → configure Anthropic + Slack
-
-# Instance 3: dev/test instance with Ollama
-JCLAW_HOME=~/.jclaw-dev ./mvnw spring-boot:run -pl jclaw-shell
-# In shell: onboard → configure Ollama
+./start.sh shell
 ```
 
-Each instance gets its own `application-local.yml` and `.env` file in its config directory. Sessions, LLM providers, and channel connections are fully isolated.
-
-For gateway instances, also set different ports:
+Or with Maven directly:
 
 ```bash
-# Gateway instance 1 on port 8080
-JCLAW_HOME=~/.jclaw-prod SERVER_PORT=8080 ./mvnw spring-boot:run -pl jclaw-gateway-app
-
-# Gateway instance 2 on port 8081
-JCLAW_HOME=~/.jclaw-staging SERVER_PORT=8081 ./mvnw spring-boot:run -pl jclaw-gateway-app
+ANTHROPIC_API_KEY=sk-ant-... ./mvnw spring-boot:run -pl jclaw-shell
 ```
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `start.sh` | **Daily driver** — start gateway (Docker or local) or interactive shell. Reads `docker-compose/.env` for config. |
+| `quickstart.sh` | **First-time Docker setup** — clones, builds image, starts stack, pulls Ollama if needed. |
+| `setup.sh` | **First-time developer setup** — installs Java 21, builds from source, launches shell or gateway. |
+
+## Configuration
+
+All configuration lives in `docker-compose/.env`. Both `start.sh` and Docker Compose read from this file.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AI_PROVIDER` | `anthropic` | LLM provider: `anthropic`, `openai`, or `ollama` |
+| `ANTHROPIC_API_KEY` | | Anthropic API key |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-5` | Anthropic model name |
+| `OPENAI_API_KEY` | | OpenAI API key |
+| `OLLAMA_ENABLED` | `false` | Enable Ollama local LLM |
+| `GATEWAY_PORT` | `8080` | Gateway HTTP port |
+
+See [docs/OPERATIONS.md](docs/OPERATIONS.md) for the full environment variable reference.
 
 ## Shell Commands
 
 | Command | Description |
 |---------|-------------|
-| `onboard` | Interactive setup wizard |
 | `chat <message>` | Send a message to the agent |
 | `new-session` | Start a fresh chat session |
 | `sessions` | List active sessions |
@@ -170,6 +200,7 @@ JCLAW_HOME=~/.jclaw-staging SERVER_PORT=8081 ./mvnw spring-boot:run -pl jclaw-ga
 | `tools` | List available tools |
 | `plugins` | List loaded plugins |
 | `skills` | List loaded skills |
+| `onboard` | Interactive setup wizard |
 
 ## Project Structure
 
