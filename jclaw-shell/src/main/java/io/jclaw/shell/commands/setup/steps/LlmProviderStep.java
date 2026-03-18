@@ -4,8 +4,9 @@ import io.jclaw.shell.commands.setup.OnboardResult;
 import io.jclaw.shell.commands.setup.WizardStep;
 import io.jclaw.shell.commands.setup.validation.LlmConnectivityTester;
 import org.springframework.shell.component.flow.ComponentFlow;
-import org.springframework.shell.component.flow.SingleItemSelectorSpec;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 
@@ -47,77 +48,60 @@ public final class LlmProviderStep implements WizardStep {
         if (provider == null) return false;
         result.setLlmProvider(provider);
 
-        // Step 2: API key (skip for Ollama)
+        // Step 2: API key or Ollama URL
         if (!"ollama".equals(provider)) {
-            ComponentFlow keyFlow = flowBuilder.clone().reset()
-                    .withStringInput("api-key")
-                        .name("Enter your " + providerDisplayName(provider) + " API key:")
-                        .maskCharacter('*')
-                        .and()
-                    .build();
-
-            ComponentFlow.ComponentFlowResult keyResult = keyFlow.run();
-            String apiKey = WizardStep.getOrNull(keyResult.getContext(), "api-key", String.class);
+            String apiKey = readLine("  Enter your " + providerDisplayName(provider) + " API key: ");
             if (apiKey == null || apiKey.isBlank()) {
                 System.out.println("  API key is required for " + providerDisplayName(provider));
                 return false;
             }
             result.setLlmApiKey(apiKey);
-        } else {
-            // Ollama base URL
-            ComponentFlow urlFlow = flowBuilder.clone().reset()
-                    .withStringInput("ollama-url")
-                        .name("Ollama base URL:")
-                        .defaultValue("http://localhost:11434")
-                        .and()
-                    .build();
 
-            ComponentFlow.ComponentFlowResult urlResult = urlFlow.run();
-            String url = WizardStep.getOrNull(urlResult.getContext(), "ollama-url", String.class);
-            if (url != null && !url.isBlank()) {
-                result.setOllamaBaseUrl(url);
+            // Validate key before proceeding to model selection
+            System.out.print("  Validating API key... ");
+            LlmConnectivityTester.TestResult validation = llmTester.test(
+                    provider, apiKey, MODELS.get(provider).getFirst(), null);
+            if (validation.success()) {
+                System.out.println("OK");
+            } else {
+                System.out.println("FAILED: " + validation.message());
+                System.out.println("  You can continue setup and fix the key later.");
             }
+        } else {
+            String url = readLine("  Ollama base URL [http://localhost:11434]: ");
+            if (url == null || url.isBlank()) {
+                url = "http://localhost:11434";
+            }
+            result.setOllamaBaseUrl(url);
         }
 
         // Step 3: Choose model
         List<String> models = MODELS.getOrDefault(provider, List.of());
-        SingleItemSelectorSpec modelSelectorSpec = flowBuilder.clone().reset()
+        var modelSpec = flowBuilder.clone().reset()
                 .withSingleItemSelector("model")
                     .name("Choose a model:");
-        for (String model : models) {
-            modelSelectorSpec.selectItem(model, model);
+        for (String m : models) {
+            modelSpec = modelSpec.selectItem(m, m);
         }
-        ComponentFlow modelFlow = modelSelectorSpec.and().build();
+        ComponentFlow modelFlow = modelSpec.and().build();
 
         ComponentFlow.ComponentFlowResult modelResult = modelFlow.run();
         String model = WizardStep.getOrNull(modelResult.getContext(), "model", String.class);
         if (model == null) return false;
         result.setLlmModel(model);
 
-        // Step 4: Test connectivity
-        ComponentFlow testFlow = flowBuilder.clone().reset()
-                .withConfirmationInput("test-connection")
-                    .name("Test connection to " + providerDisplayName(provider) + "?")
-                    .defaultValue(true)
-                    .and()
-                .build();
-
-        ComponentFlow.ComponentFlowResult testResult = testFlow.run();
-        Boolean shouldTest = WizardStep.getOrNull(testResult.getContext(), "test-connection", Boolean.class);
-
-        if (Boolean.TRUE.equals(shouldTest)) {
-            System.out.print("  Testing connection... ");
-            LlmConnectivityTester.TestResult testOutcome = llmTester.test(
-                    provider, result.llmApiKey(), model, result.ollamaBaseUrl());
-            if (testOutcome.success()) {
-                System.out.println("OK");
-            } else {
-                System.out.println("FAILED: " + testOutcome.message());
-                System.out.println("  You can continue setup and fix this later.");
-            }
-        }
-
         return true;
+    }
+
+    private String readLine(String prompt) {
+        System.out.print(prompt);
+        System.out.flush();
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            return reader.readLine();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String providerDisplayName(String provider) {

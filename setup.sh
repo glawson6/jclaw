@@ -69,11 +69,11 @@ detect_java() {
 
     if [ -n "$java_cmd" ]; then
         local version
-        version=$("$java_cmd" -version 2>&1 | head -1 | sed 's/.*"\([0-9]*\).*/\1/')
+        version=$("$java_cmd" -version 2>&1 | head -1 | awk -F'"' '{print $2}' | cut -d. -f1)
         if [ "$version" -ge "$REQUIRED_JAVA_VERSION" ] 2>/dev/null; then
             # Set JAVA_HOME if not already pointing to the right place
             if [ -z "${JAVA_HOME:-}" ]; then
-                JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v java)")")" 2>/dev/null || true)
+                JAVA_HOME="${SDKMAN_DIR:-$HOME/.sdkman}/candidates/java/current"
             fi
             ok "Java $version detected (JAVA_HOME=$JAVA_HOME)"
             export JAVA_HOME
@@ -94,11 +94,11 @@ install_java() {
         info "Installing SDKMAN..."
         curl -s "https://get.sdkman.io" | bash
         # shellcheck source=/dev/null
-        source "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"
+        set +u; source "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"; set -u
         ok "SDKMAN installed"
     else
         # shellcheck source=/dev/null
-        source "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"
+        set +u; source "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"; set -u
         ok "SDKMAN already installed"
     fi
 
@@ -121,6 +121,13 @@ install_java() {
 }
 
 ensure_java() {
+    # Source SDKMAN if available (disable -u temporarily — SDKMAN uses unbound vars)
+    if [ -s "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh" ]; then
+        set +u
+        source "${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"
+        set -u
+    fi
+
     if ! detect_java; then
         install_java
     fi
@@ -145,6 +152,9 @@ launch_shell() {
     echo "The interactive shell is starting. Run the onboarding wizard to configure:"
     echo ""
     printf "  ${BOLD}jclaw> onboard${NC}\n"
+    echo ""
+
+    warn "After onboarding completes, restart the shell to activate your LLM configuration."
     echo ""
 
     ./mvnw spring-boot:run -pl jclaw-shell -q

@@ -23,15 +23,17 @@ jclaw:
     enabled: true
 
 spring:
+  main:
+    web-application-type: none
   config:
     import: optional:file:${user.home}/.jclaw/application-local.yml
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:}
+      api-key: ${OPENAI_API_KEY:#{null}}
     anthropic:
-      api-key: ${ANTHROPIC_API_KEY:}
+      api-key: ${ANTHROPIC_API_KEY:#{null}}
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:#{null}}
   shell:
     interactive:
       enabled: true
