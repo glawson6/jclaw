@@ -8,23 +8,35 @@ import io.jclaw.plugin.JClawPlugin;
 import io.jclaw.plugin.PluginApi;
 import io.jclaw.core.plugin.PluginDefinition;
 import io.jclaw.core.plugin.PluginKind;
+import org.kohsuke.github.GHPullRequest;
+import org.kohsuke.github.GHPullRequestFileDetail;
+import org.kohsuke.github.GHRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
 /**
- * Plugin that registers a get_diff tool for fetching code diffs.
- * Demonstrates the JClawPlugin SPI for tool registration.
+ * Plugin that registers a get_diff tool for fetching code diffs from GitHub PRs.
  */
 @Component
 public class CodeReviewPlugin implements JClawPlugin {
+
+    private static final Logger log = LoggerFactory.getLogger(CodeReviewPlugin.class);
+
+    private final GitHubClientProvider gitHubClientProvider;
+
+    public CodeReviewPlugin(GitHubClientProvider gitHubClientProvider) {
+        this.gitHubClientProvider = gitHubClientProvider;
+    }
 
     @Override
     public PluginDefinition definition() {
         return new PluginDefinition(
                 "code-review-plugin",
                 "Code Review Plugin",
-                "Provides tools for fetching and analyzing code diffs",
+                "Provides tools for fetching and analyzing code diffs from GitHub",
                 "1.0.0",
                 PluginKind.GENERAL
         );
@@ -32,20 +44,25 @@ public class CodeReviewPlugin implements JClawPlugin {
 
     @Override
     public void register(PluginApi api) {
-        api.registerTool(new GetDiffTool());
+        api.registerTool(new GetDiffTool(gitHubClientProvider));
     }
 
     /**
-     * Tool that simulates fetching a code diff. In production, this would
-     * integrate with GitHub/GitLab APIs to fetch actual PR diffs.
+     * Tool that fetches a real code diff from a GitHub pull request.
      */
     static class GetDiffTool implements ToolCallback {
+
+        private final GitHubClientProvider gitHubClientProvider;
+
+        GetDiffTool(GitHubClientProvider gitHubClientProvider) {
+            this.gitHubClientProvider = gitHubClientProvider;
+        }
 
         @Override
         public ToolDefinition definition() {
             return new ToolDefinition(
                     "get_diff",
-                    "Fetch a code diff for review (simulated — replace with GitHub/GitLab API)",
+                    "Fetch a code diff from a GitHub pull request",
                     "code-review",
                     """
                     {
@@ -65,22 +82,32 @@ public class CodeReviewPlugin implements JClawPlugin {
             String repo = (String) parameters.get("repo");
             Number prNumber = (Number) parameters.get("pr_number");
 
-            // Simulated diff — replace with actual GitHub API call
-            String diff = String.format("""
-                    --- a/src/main/java/com/example/UserService.java
-                    +++ b/src/main/java/com/example/UserService.java
-                    @@ -15,6 +15,12 @@
-                     public class UserService {
-                    +    public User findUser(String query) {
-                    +        // TODO: add input validation
-                    +        String sql = "SELECT * FROM users WHERE name = '" + query + "'";
-                    +        return jdbcTemplate.queryForObject(sql, User.class);
-                    +    }
-                    +
-                         public List<User> getAllUsers() {
-                    Repository: %s, PR: #%d""", repo, prNumber.intValue());
+            try {
+                GHRepository repository = gitHubClientProvider.getClient().getRepository(repo);
+                GHPullRequest pr = repository.getPullRequest(prNumber.intValue());
 
-            return new ToolResult.Success(diff);
+                var sb = new StringBuilder();
+                sb.append("PR #%d: %s\n".formatted(pr.getNumber(), pr.getTitle()));
+                sb.append("Author: %s\n".formatted(pr.getUser().getLogin()));
+                sb.append("Base: %s ← Head: %s\n\n".formatted(pr.getBase().getRef(), pr.getHead().getRef()));
+
+                for (GHPullRequestFileDetail file : pr.listFiles()) {
+                    sb.append("--- %s (%s) +%d -%d\n".formatted(
+                            file.getFilename(),
+                            file.getStatus(),
+                            file.getAdditions(),
+                            file.getDeletions()));
+                    String patch = file.getPatch();
+                    if (patch != null) {
+                        sb.append(patch).append("\n\n");
+                    }
+                }
+
+                return new ToolResult.Success(sb.toString());
+            } catch (Exception e) {
+                log.error("Failed to fetch diff for {}/#{}", repo, prNumber, e);
+                return new ToolResult.Error("Failed to fetch diff: " + e.getMessage());
+            }
         }
     }
 }

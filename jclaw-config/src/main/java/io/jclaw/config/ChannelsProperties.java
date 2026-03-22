@@ -9,14 +9,18 @@ public record ChannelsProperties(
         EmailProperties email,
         SmsProperties sms,
         SlackProperties slack,
-        DiscordProperties discord
+        DiscordProperties discord,
+        SignalProperties signal,
+        TeamsProperties teams
 ) {
     public static final ChannelsProperties DEFAULT = new ChannelsProperties(
             TelegramProperties.DEFAULT,
             EmailProperties.DEFAULT,
             SmsProperties.DEFAULT,
             SlackProperties.DEFAULT,
-            DiscordProperties.DEFAULT
+            DiscordProperties.DEFAULT,
+            SignalProperties.DEFAULT,
+            TeamsProperties.DEFAULT
     );
 
     public ChannelsProperties {
@@ -25,6 +29,8 @@ public record ChannelsProperties(
         if (sms == null) sms = SmsProperties.DEFAULT;
         if (slack == null) slack = SlackProperties.DEFAULT;
         if (discord == null) discord = DiscordProperties.DEFAULT;
+        if (signal == null) signal = SignalProperties.DEFAULT;
+        if (teams == null) teams = TeamsProperties.DEFAULT;
     }
 
     public record TelegramProperties(
@@ -122,6 +128,50 @@ public record ChannelsProperties(
     ) {
         public static final DiscordProperties DEFAULT = new DiscordProperties(
                 false, null, null, false, null
+        );
+
+        public Set<String> allowedSenderIds() {
+            if (allowedSenders == null || allowedSenders.isBlank()) return Set.of();
+            return Arrays.stream(allowedSenders.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+    }
+
+    public record SignalProperties(
+            boolean enabled,
+            String mode,
+            String apiUrl,
+            String phoneNumber,
+            int pollIntervalSeconds,
+            String cliCommand,
+            int tcpPort,
+            String allowedSenders
+    ) {
+        public static final SignalProperties DEFAULT = new SignalProperties(
+                false, "http-client", null, null, 2, "signal-cli", 7583, null
+        );
+
+        public Set<String> allowedSenderIds() {
+            if (allowedSenders == null || allowedSenders.isBlank()) return Set.of();
+            return Arrays.stream(allowedSenders.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+    }
+
+    public record TeamsProperties(
+            boolean enabled,
+            String appId,
+            String appSecret,
+            String tenantId,
+            boolean skipJwtValidation,
+            String allowedSenders
+    ) {
+        public static final TeamsProperties DEFAULT = new TeamsProperties(
+                false, null, null, null, false, null
         );
 
         public Set<String> allowedSenderIds() {

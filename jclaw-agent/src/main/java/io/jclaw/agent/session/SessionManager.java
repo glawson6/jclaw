@@ -59,6 +59,11 @@ public class SessionManager {
         return transitionState(sessionKey, SessionState.CLOSED);
     }
 
+    public void replaceMessages(String sessionKey, java.util.List<Message> newMessages) {
+        sessions.computeIfPresent(sessionKey,
+                (k, session) -> session.withMessages(newMessages));
+    }
+
     public void reset(String sessionKey) {
         sessions.remove(sessionKey);
     }

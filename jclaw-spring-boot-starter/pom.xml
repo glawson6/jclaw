@@ -84,12 +84,32 @@
         </dependency>
         <dependency>
             <groupId>io.jclaw</groupId>
+            <artifactId>jclaw-channel-signal</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.jclaw</groupId>
+            <artifactId>jclaw-channel-teams</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.jclaw</groupId>
             <artifactId>jclaw-audit</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>io.jclaw</groupId>
             <artifactId>jclaw-media</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.jclaw</groupId>
+            <artifactId>jclaw-compaction</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.jclaw</groupId>
+            <artifactId>jclaw-rest-cli-architect</artifactId>
             <optional>true</optional>
         </dependency>
 

@@ -104,13 +104,18 @@ Custom content
         skills.any { it.name() == "custom-skill" }
     }
 
-    def "loadBundled loads all 6 bundled skills"() {
+    def "loadBundled loads bundled skills (filtered by binary availability)"() {
         when:
         def skills = loader.loadBundled()
 
         then:
-        skills.size() == 7
-        skills.collect { it.name() } as Set == ["coding", "web-research", "system-admin", "conversation", "summarize", "k8s-monitoring", "jclaw-developer"] as Set
+        // At least the skills with no requiredBins should always load
+        skills.size() >= 7
+        def names = skills.collect { it.name() } as Set
+        // Core skills with no requiredBins or only curl (universally available) should always load
+        names.containsAll(["coding", "web-research", "system-admin", "conversation", "summarize", "jclaw-developer"])
+        // Skills requiring specific binaries may be filtered out depending on the machine
+        // Total bundled skills on classpath: 29 (7 original + 21 ported + cli-architect)
     }
 
     def "bundled skills have correct alwaysInclude flags"() {

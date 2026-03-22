@@ -26,5 +26,12 @@
         <module>meeting-assistant</module>
         <module>helpdesk-bot</module>
         <module>content-pipeline</module>
+        <module>security-handshake</module>
+        <module>security-handshake-server</module>
+        <module>incident-responder</module>
+        <module>research-assistant</module>
+        <module>data-pipeline</module>
+        <module>code-scaffolder</module>
+        <module>telegram-docstore</module>
     </modules>
 </project>

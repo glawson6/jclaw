@@ -18,11 +18,17 @@ public record AgentProperties(
             AgentModelConfig model,
             List<String> skills,
             ToolPolicyConfig tools,
-            IdentityProperties identity
+            IdentityProperties identity,
+            ToolLoopProperties toolLoop
     ) {
+        public AgentConfig {
+            if (toolLoop == null) toolLoop = ToolLoopProperties.DEFAULT;
+        }
+
         public static final AgentConfig DEFAULT = new AgentConfig(
                 "default", "Default Agent", null,
-                AgentModelConfig.DEFAULT, List.of(), ToolPolicyConfig.DEFAULT, null
+                AgentModelConfig.DEFAULT, List.of(), ToolPolicyConfig.DEFAULT, null,
+                ToolLoopProperties.DEFAULT
         );
     }
 

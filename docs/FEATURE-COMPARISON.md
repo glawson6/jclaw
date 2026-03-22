@@ -3,7 +3,7 @@
 ## Overview
 
 - **OpenClaw** — TypeScript/Node.js personal AI gateway with 25+ channels, 50+ skills, native apps (macOS/iOS/Android), voice, canvas, browser automation
-- **JClaw** — Java 21 / Spring Boot 3.5 / Spring AI port of OpenClaw. Enterprise-focused with multi-tenancy, JWT security, audit, k8s monitoring, modular starters
+- **JClaw** — Java 21 / Spring Boot 3.5 / Spring AI port of OpenClaw. 38 modules, 8 channel adapters, 30+ tools, enterprise-focused with multi-tenancy, JWT security, audit, k8s monitoring, modular starters
 - **Embabel** — Kotlin/Spring agent framework by Rod Johnson. GOAP planning, workflow patterns, multi-model mixing, structured output, HITL, guardrails, A2A protocol
 
 JClaw's goal is to combine the best of both: OpenClaw's breadth of channels/tools/skills with Embabel's planning/orchestration depth, wrapped in an enterprise-grade Java platform.
@@ -15,29 +15,33 @@ JClaw's goal is to combine the best of both: OpenClaw's breadth of channels/tool
 | Feature Area | OpenClaw | JClaw | Gap |
 |---|---|---|---|
 | **Language** | TypeScript/Node.js | Java 21 / Spring Boot 3.5 | By design |
-| **Messaging Channels** | 25+ (WhatsApp, iMessage, Signal, IRC, Twitch, Nostr, LINE, Matrix, Google Chat, etc.) | 6 (Telegram, Slack, Discord, Email, SMS, WebSocket) | 19+ channels missing |
+| **Messaging Channels** | 25+ (WhatsApp, iMessage, IRC, Twitch, Nostr, LINE, Matrix, Google Chat, etc.) | 8 (Telegram, Slack, Discord, Email, SMS, Signal, Microsoft Teams, WebSocket) | 17+ channels missing |
 | **LLM Providers** | 20+ (Anthropic, OpenAI, Ollama, Mistral, Bedrock, Qwen, Moonshot, GLM, Venice, LiteLLM, OpenRouter, etc.) | 4 (Anthropic, OpenAI, Gemini, Ollama) | 16+ missing (can add via Spring AI starters) |
-| **Built-in Tools** | browser, canvas, exec, file ops, sessions, memory, cron, nodes (camera/screen/location) | 5 core (file read/write, shell exec, web fetch, web search) + 9 k8s | Browser, Canvas, Cron, Device node tools missing |
+| **Built-in Tools** | browser, canvas, exec, file ops, sessions, memory, cron, nodes (camera/screen/location) | 5 core + 9 k8s + 8 browser + 3 canvas + 3 code + 8 docstore + 1 memory + 1 security = **38 tools** | Device node tools missing; parity on browser, canvas, code |
 | **Skills** | 50+ bundled (1password, apple-notes, github, notion, obsidian, spotify, trello, weather, etc.) | 6 bundled (coding, conversation, web-research, system-admin, summarize, k8s-monitoring) | 44+ skills missing |
-| **Memory** | Markdown-first files + vector search + auto-compaction + daily logs + long-term curated | In-memory BM25 + VectorStore (Spring AI) | Workspace memory, auto-compaction, daily logs missing |
-| **Voice** | Voice Wake, Talk Mode, PTT (macOS/iOS/Android) | None | Voice completely missing |
-| **Canvas/A2UI** | Agent-controlled real-time visual UI | None | Canvas completely missing |
+| **Memory** | Markdown-first files + vector search + auto-compaction + daily logs + long-term curated | Workspace file memory + daily log appender + hybrid search (BM25 + VectorStore) + session transcript store | **Ported.** Workspace memory, daily logs, hybrid search all implemented |
+| **Voice** | Voice Wake, Talk Mode, PTT (macOS/iOS/Android) | TTS/STT SPI + OpenAI provider (TTS + Whisper STT) + directive parser | **Ported (API layer).** Native app push-to-talk missing |
+| **Canvas/A2UI** | Agent-controlled real-time visual UI | 3 tools: `canvas_present` (push HTML), `canvas_eval` (run JS), `canvas_snapshot` (capture state) | **Ported.** Full A2UI artifact rendering |
 | **Native Apps** | macOS menu bar, iOS, Android nodes with camera/screen/location/SMS | None (CLI + gateway only) | Native apps completely missing |
 | **Device Nodes** | iOS/Android as sensor nodes (camera snap/clip, screen record, location, contacts, SMS) | None | Device integration missing |
-| **Browser Tool** | Dedicated Chrome/Chromium instance with snapshots, actions, JS eval | None | Browser automation missing |
+| **Browser Tool** | Dedicated Chrome/Chromium instance with snapshots, actions, JS eval | 8 Playwright tools: navigate, click, type, screenshot, evaluate, read_page, list_tabs, close_tab | **Ported.** Full browser automation |
 | **Group Chat** | Mention-based routing in groups across channels | None | Group chat routing missing |
 | **Multi-Agent** | Multiple isolated agents per gateway, per-agent workspaces, routing | Single agent per runtime | Multi-agent routing missing |
-| **Scheduling** | Cron jobs, wakeups, Gmail Pub/Sub, webhooks | None | Scheduling missing |
-| **DM Security** | Pairing codes, allowlists, per-channel-peer isolation | JWT auth, tenant isolation | Different approach — JClaw is enterprise-focused |
-| **Identity Linking** | Map users across channels to shared sessions | None | Cross-channel identity missing |
-| **Context Mgmt** | Token-aware compaction, `/context list/detail`, thinking levels | Basic conversation history | Context compaction, inspection missing |
-| **Plugin System** | TypeScript plugins loaded at runtime via jiti, ClawHub marketplace | Java plugins via SPI + Spring scanning + ServiceLoader | JClaw's is more formal but fewer plugins exist |
-| **Deployment** | npm, Docker, Podman, Nix, macOS app, iOS, Android, cloud VPS | Maven, Docker, k8s (JKube), Spring Boot starters | JClaw is enterprise-oriented |
+| **Scheduling** | Cron jobs, wakeups, Gmail Pub/Sub, webhooks | `CronService` — cron expressions, JSON persistence, virtual threads, run history, manual trigger | **Ported.** Full cron scheduling |
+| **DM Security** | Pairing codes, allowlists, per-channel-peer isolation | JWT auth, tenant isolation, agent-to-agent security handshake (ECDH + challenge-response) | Different approach — JClaw is enterprise-focused + has agent-to-agent crypto |
+| **Identity Linking** | Map users across channels to shared sessions | `IdentityLinkService` — cross-channel canonical user IDs, link/unlink/resolve | **Ported.** Full cross-channel identity |
+| **Context Mgmt** | Token-aware compaction, `/context list/detail`, thinking levels | `CompactionService` — token-budget-aware LLM summarization, identifier preservation | **Ported.** Context compaction implemented; `/context` inspection missing |
+| **Plugin System** | TypeScript plugins loaded at runtime via jiti, ClawHub marketplace | Java plugins via SPI + Spring scanning + ServiceLoader + lifecycle hooks (BEFORE/AFTER_TOOL_CALL, MESSAGE_RECEIVED, etc.) | JClaw's is more formal but fewer plugins exist |
+| **Deployment** | npm, Docker, Podman, Nix, macOS app, iOS, Android, cloud VPS | Maven, Docker, k8s (JKube), Spring Boot starters (9 starters) | JClaw is enterprise-oriented |
 | **CLI** | 40+ subcommands, TUI, QR pairing, doctor diagnostics | Spring Shell with ~12 commands + onboarding wizard | Many CLI features missing |
 | **Config Hot-Reload** | hybrid/hot/restart modes | Requires restart | Hot-reload missing |
-| **Media Pipeline** | FFmpeg transcoding, TTS (ElevenLabs/OpenAI), STT (Whisper), image gen | MediaAnalysisProvider SPI (abstract) | Concrete media processing missing |
-| **Session Model** | Main session + per-peer + DM scope policies + thread support + JSONL transcripts | Basic in-memory sessions with tenant isolation | Session continuity, transcripts, DM scoping missing |
-| **MCP** | mcporter bridge (loose coupling) | MCP hosting (server-side, REST endpoints) | Different direction — JClaw hosts MCP, OpenClaw consumes it |
+| **Media Pipeline** | FFmpeg transcoding, TTS (ElevenLabs/OpenAI), STT (Whisper), image gen | `MediaAnalysisProvider` SPI + `CompositeMediaAnalyzer` + Voice module (OpenAI TTS/STT) | **Partial.** TTS/STT ported, FFmpeg transcoding and image gen missing |
+| **Session Model** | Main session + per-peer + DM scope policies + thread support + JSONL transcripts | Sessions with tenant isolation + `SessionTranscriptStore` for persistent transcripts | **Partial.** Transcripts ported; DM scoping, thread support missing |
+| **MCP** | mcporter bridge (loose coupling) | MCP hosting (server-side, REST endpoints) + Security Handshake MCP provider | Different direction — JClaw hosts MCP, OpenClaw consumes it |
+| **Document Store** | N/A | `DocStoreService` — 8 tools (search, list, get, tag, describe, analyze, delete, add URL) + LLM analysis + Telegram integration | **JClaw-original feature** |
+| **Code Tools** | N/A | 3 tools: `file_edit`, `glob`, `grep` — agentic coding capabilities | **JClaw-original feature** |
+| **Agent-to-Agent Security** | N/A | 31-class cryptographic handshake protocol (ECDH, challenge-response, pluggable bootstrap trust, MCP endpoint) | **JClaw-original feature** |
+| **Explicit Tool Loop** | N/A | `ExplicitToolLoop` — iteration capping, hook observability, human-in-the-loop approval gates | **JClaw-original feature** |
 
 ---
 
@@ -46,9 +50,9 @@ JClaw's goal is to combine the best of both: OpenClaw's breadth of channels/tool
 | Feature Area | JClaw | Embabel | Gap / Synergy |
 |---|---|---|---|
 | **Planning** | None (sequential ChatClient calls) | GOAP (A* search), Utility AI, State Machine | JClaw needs Embabel's planning |
-| **Tool System** | ToolCallback SPI + ToolRegistry + AbstractBuiltinTool | 15+ tool types: Agentic, Playbook, StateMachine, Unfolding, Subagent, MatryoshkaTool, Progressive, Replanning | Embabel far richer |
-| **Workflow Patterns** | None | RepeatUntil, ScatterGather, Consensus, Branching, Transformation chains | All missing from JClaw |
-| **Human-in-the-Loop** | None | Confirmation dialogs, form-based input, typed requests, conditional awaiting | HITL missing from JClaw |
+| **Tool System** | ToolCallback SPI + ToolRegistry + 38 tools across 10 categories + ExplicitToolLoop with approval gates | 15+ tool types: Agentic, Playbook, StateMachine, Unfolding, Subagent, MatryoshkaTool, Progressive, Replanning | Embabel richer in tool types; JClaw richer in concrete tools |
+| **Workflow Patterns** | ExplicitToolLoop with iteration capping and hook observability | RepeatUntil, ScatterGather, Consensus, Branching, Transformation chains | JClaw has basic loop; Embabel has advanced patterns |
+| **Human-in-the-Loop** | ExplicitToolLoop approval gate (approve/deny/modify per tool call) | Confirmation dialogs, form-based input, typed requests, conditional awaiting | JClaw has basic HITL; Embabel's is richer |
 | **Guardrails** | None | Input/output guardrails, structural validation, path-to-completion validation | Guardrails missing |
 | **Blackboard** | None (tool context only) | Typed shared memory, boolean conditions, named bindings, built-in blackboard tools | Shared state missing |
 | **LLM Providers** | 4 via Spring AI starters | 11 (Anthropic, OpenAI, Ollama, Bedrock, DeepSeek, Gemini, Google GenAI, Mistral, LM Studio, Docker models) | Embabel has more providers |
@@ -58,19 +62,25 @@ JClaw's goal is to combine the best of both: OpenClaw's breadth of channels/tool
 | **Event System** | None | 25+ event types (action start/end, goal achieved, LLM calls, tool calls, planning events) | Event system missing |
 | **Observability** | GatewayMetrics (counters) + HealthIndicator | OpenTelemetry + Zipkin tracing + instrumented models + event listeners | Observability limited in JClaw |
 | **A2A Protocol** | None | Google A2A agent interoperability with `@Export` | A2A missing |
-| **MCP** | Server-side MCP hosting | Server + Client MCP support | Complementary |
-| **RAG** | Document parsing (PDF/HTML/text) + VectorStore search | Lucene search + Tika parsing + chunking pipeline | Both have RAG; Embabel's is more complete |
+| **MCP** | Server-side MCP hosting + Security Handshake MCP provider | Server + Client MCP support | Complementary; JClaw adds agent-to-agent security |
+| **RAG** | Document parsing (PDF/HTML/text) + VectorStore search + DocStore (8-tool document management) | Lucene search + Tika parsing + chunking pipeline | Both have RAG; JClaw's DocStore adds document lifecycle management |
 | **Forms/UX** | Spring Shell ComponentFlow | 12+ form controls, auto-generation, validation | Rich forms missing from JClaw |
-| **Chat System** | Basic session + messages | Full conversation management, windowing, multimodal content | Conversation mgmt richer in Embabel |
+| **Chat System** | Sessions with compaction, transcript storage, identity linking | Full conversation management, windowing, multimodal content | JClaw improved; Embabel still richer |
 | **Testing** | Spock specs (unit tests) | FakeAction, ScriptedLlmOperations, event capture, mock mode | Test utilities missing from JClaw |
 | **Persona System** | None | Persona types (CoStar, RoleGoalBackstory), themed logging | Persona system missing |
 | **Budget Control** | None | MaxActions, MaxCost, MaxTokens termination policies | Budget control missing |
-| **Channels** | 6 messaging channels + gateway | None (no channel concept) | JClaw's strength |
+| **Channels** | 8 messaging channels (Telegram, Slack, Discord, Email, SMS, Signal, Teams, WebSocket) + gateway | None (no channel concept) | JClaw's strength |
 | **Multi-Tenancy** | Full (ThreadLocal tenant, JWT, per-tenant sessions/memory/skills/audit) | Basic (User/UserService) | JClaw's strength |
-| **Plugin System** | Plugin SPI + Spring scan + ServiceLoader + HookRunner | @Agent component scanning (agents ARE the extensibility unit) | Different paradigms |
+| **Plugin System** | Plugin SPI + Spring scan + ServiceLoader + HookRunner (BEFORE/AFTER_TOOL_CALL, MESSAGE_RECEIVED, etc.) | @Agent component scanning (agents ARE the extensibility unit) | Different paradigms |
 | **Skills** | 6 bundled skills with YAML metadata, tenant filtering, versioning | No separate skill concept (skills = agents) | JClaw's skill system is distinct |
-| **Security** | JWT auth, tenant isolation, JJWT | Basic identity management | JClaw's strength |
-| **Deployment** | Docker, k8s, Spring Boot starters, gateway app | Spring Boot starters | JClaw has more deployment options |
+| **Security** | JWT auth, tenant isolation, JJWT + agent-to-agent crypto handshake (ECDH, challenge-response, MCP endpoint) | Basic identity management | JClaw's strength (enterprise + agent-to-agent) |
+| **Browser** | 8 Playwright tools (navigate, click, type, screenshot, evaluate, read_page, tabs) | None | JClaw's strength |
+| **Voice** | TTS/STT SPI + OpenAI provider | None | JClaw's strength |
+| **Canvas** | 3 A2UI tools (present HTML, eval JS, snapshot) | None | JClaw's strength |
+| **Cron/Scheduling** | CronService — cron expressions, JSON persistence, virtual threads, run history | None | JClaw's strength |
+| **Identity** | Cross-channel identity linking (canonical user IDs) | None | JClaw's strength |
+| **Context Compaction** | CompactionService — token-budget-aware LLM summarization | None | JClaw's strength |
+| **Deployment** | Docker, k8s, Spring Boot starters (9), gateway app, CLI shell | Spring Boot starters | JClaw has more deployment options |
 | **Audit** | AuditEvent + AuditLogger SPI + InMemoryAuditLogger | Event system serves similar purpose | JClaw has formal audit trail |
 
 ---
@@ -80,39 +90,42 @@ JClaw's goal is to combine the best of both: OpenClaw's breadth of channels/tool
 | Capability | OpenClaw | JClaw | Embabel | Best Source |
 |---|:---:|:---:|:---:|---|
 | AI Planning (GOAP) | - | - | +++ | Embabel |
-| Workflow Patterns | - | - | +++ | Embabel |
+| Workflow Patterns | - | + | +++ | Embabel |
 | Multi-Model Mixing | ++ | - | +++ | Embabel |
 | Structured Output | + | - | ++ | Embabel |
 | Subagent Orchestration | - | - | +++ | Embabel |
-| Human-in-the-Loop | - | - | +++ | Embabel |
+| Human-in-the-Loop | - | + | +++ | Embabel (JClaw has basic approval gates) |
 | Guardrails | + | - | ++ | Embabel |
 | Event System | ++ | - | +++ | Embabel |
-| Tool Richness | +++ | ++ | +++ | OpenClaw (breadth) / Embabel (depth) |
-| Messaging Channels | +++ | ++ | - | OpenClaw |
+| Tool Richness | +++ | +++ (38 tools) | +++ | All three strong; different strengths |
+| Messaging Channels | +++ (25+) | ++ (8) | - | OpenClaw |
 | Multi-Tenancy | + | +++ | - | JClaw |
 | JWT Security | + | +++ | - | JClaw |
+| Agent-to-Agent Security | - | +++ (ECDH handshake) | - | JClaw |
 | Audit Trail | + | ++ | - | JClaw |
-| Voice/PTT | +++ | - | - | OpenClaw |
-| Canvas/A2UI | +++ | - | - | OpenClaw |
+| Voice/PTT | +++ | ++ (TTS/STT SPI + OpenAI) | - | OpenClaw (native); JClaw (API) |
+| Canvas/A2UI | +++ | ++ (3 tools) | - | OpenClaw (JClaw has parity) |
 | Native Apps | +++ | - | - | OpenClaw |
-| Browser Automation | +++ | - | - | OpenClaw |
+| Browser Automation | +++ | +++ (8 Playwright tools) | - | OpenClaw / JClaw (parity) |
 | Device Nodes | +++ | - | - | OpenClaw |
-| Memory (workspace) | +++ | + | + | OpenClaw |
-| Context Compaction | +++ | - | + | OpenClaw |
-| Scheduling/Cron | +++ | - | - | OpenClaw |
+| Memory (workspace) | +++ | +++ (workspace + daily logs + hybrid search + transcripts) | + | OpenClaw / JClaw (parity) |
+| Context Compaction | +++ | ++ (LLM summarization) | + | OpenClaw / JClaw (near parity) |
+| Scheduling/Cron | +++ | +++ (CronService + JSON store + virtual threads) | - | OpenClaw / JClaw (parity) |
 | Group Chat Routing | +++ | - | - | OpenClaw |
-| Identity Linking | +++ | - | - | OpenClaw |
+| Identity Linking | +++ | ++ (IdentityLinkService) | - | OpenClaw / JClaw (parity) |
 | Multi-Agent | ++ | - | +++ | Embabel (planning) / OpenClaw (routing) |
-| K8s Monitoring | - | +++ | - | JClaw |
+| K8s Monitoring | - | +++ (9 tools) | - | JClaw |
 | Document Processing | ++ | ++ | ++ | Comparable |
+| Document Store | - | +++ (8 tools + LLM analysis + Telegram integration) | - | JClaw |
+| Code Tools | - | ++ (file_edit, glob, grep) | - | JClaw |
 | Plugin System | +++ | ++ | + | OpenClaw |
 | Skills | +++ (50+) | ++ (6) | - | OpenClaw |
-| MCP | + (client) | ++ (server) | ++ (both) | Embabel |
+| MCP | + (client) | ++ (server + security handshake) | ++ (both) | Embabel / JClaw |
 | A2A Protocol | - | - | ++ | Embabel |
 | RAG | + | ++ | ++ | Embabel/JClaw |
 | Observability | ++ | + | +++ | Embabel |
 | Testing Support | ++ | ++ | +++ | Embabel |
-| Enterprise Deployment | + | +++ | ++ | JClaw |
+| Enterprise Deployment | + | +++ (9 starters) | ++ | JClaw |
 | Spring Integration | - | +++ | +++ | JClaw / Embabel |
 | Onboarding UX | ++ | ++ | + | Comparable |
 | Forms/Rich UI | + | + | +++ | Embabel |

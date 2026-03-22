@@ -48,6 +48,10 @@
             <groupId>io.jclaw</groupId>
             <artifactId>jclaw-channel-sms</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.jclaw</groupId>
+            <artifactId>jclaw-channel-signal</artifactId>
+        </dependency>
 
         <!-- Embedded web server -->
         <dependency>

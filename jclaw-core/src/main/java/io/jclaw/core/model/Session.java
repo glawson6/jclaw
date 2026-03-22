@@ -37,4 +37,8 @@ public record Session(
     public Session withState(SessionState newState) {
         return new Session(id, sessionKey, agentId, tenantId, createdAt, Instant.now(), newState, messages);
     }
+
+    public Session withMessages(List<Message> newMessages) {
+        return new Session(id, sessionKey, agentId, tenantId, createdAt, Instant.now(), state, newMessages);
+    }
 }

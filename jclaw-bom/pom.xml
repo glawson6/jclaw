@@ -91,6 +91,16 @@
             </dependency>
             <dependency>
                 <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-signal</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-channel-teams</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
                 <artifactId>jclaw-security</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -147,6 +157,31 @@
             <dependency>
                 <groupId>io.jclaw</groupId>
                 <artifactId>jclaw-canvas</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-docstore</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-docstore-telegram</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-subscription</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-subscription-telegram</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-rest-cli-architect</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

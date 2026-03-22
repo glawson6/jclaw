@@ -16,5 +16,6 @@ public final class ToolCatalog {
     public static final String SECTION_KUBERNETES = "Kubernetes";
     public static final String SECTION_BROWSER = "Browser";
     public static final String SECTION_CANVAS = "Canvas";
+    public static final String SECTION_SECURITY = "Security";
     public static final String SECTION_CUSTOM = "Custom";
 }

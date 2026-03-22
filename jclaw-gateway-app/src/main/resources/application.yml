@@ -61,6 +61,13 @@ jclaw:
       bot-token: ${DISCORD_BOT_TOKEN:}
       application-id: ${DISCORD_APPLICATION_ID:}
       use-gateway: ${DISCORD_USE_GATEWAY:false}
+    teams:
+      enabled: ${TEAMS_ENABLED:false}
+      app-id: ${TEAMS_APP_ID:}
+      app-secret: ${TEAMS_APP_SECRET:}
+      tenant-id: ${TEAMS_TENANT_ID:}
+      skip-jwt-validation: ${TEAMS_SKIP_JWT_VALIDATION:false}
+      allowed-senders: ${TEAMS_ALLOWED_SENDERS:}
 
 spring:
   config:

@@ -167,4 +167,58 @@ public class JClawChannelAutoConfiguration {
             return new io.jclaw.channel.discord.DiscordAdapter(config, webhookDispatcher);
         }
     }
+
+    /**
+     * Signal adapter auto-configuration.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "io.jclaw.channel.signal.SignalAdapter")
+    @ConditionalOnProperty(prefix = "jclaw.channels.signal", name = "enabled", havingValue = "true")
+    static class SignalAutoConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public io.jclaw.channel.signal.SignalAdapter signalAdapter(JClawProperties properties) {
+            var signal = properties.channels().signal();
+            var mode = "embedded".equalsIgnoreCase(signal.mode())
+                    ? io.jclaw.channel.signal.SignalMode.EMBEDDED
+                    : io.jclaw.channel.signal.SignalMode.HTTP_CLIENT;
+            var config = new io.jclaw.channel.signal.SignalConfig(
+                    mode,
+                    signal.phoneNumber(),
+                    signal.enabled(),
+                    signal.apiUrl(),
+                    signal.pollIntervalSeconds(),
+                    signal.cliCommand(),
+                    signal.tcpPort(),
+                    signal.allowedSenderIds());
+            return new io.jclaw.channel.signal.SignalAdapter(config);
+        }
+    }
+
+    /**
+     * Microsoft Teams adapter auto-configuration.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "io.jclaw.channel.teams.TeamsAdapter")
+    @ConditionalOnProperty(prefix = "jclaw.channels.teams", name = "enabled", havingValue = "true")
+    static class TeamsAutoConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        @ConditionalOnBean(io.jclaw.gateway.WebhookDispatcher.class)
+        public io.jclaw.channel.teams.TeamsAdapter teamsAdapter(
+                JClawProperties properties,
+                io.jclaw.gateway.WebhookDispatcher webhookDispatcher) {
+            var teams = properties.channels().teams();
+            var config = new io.jclaw.channel.teams.TeamsConfig(
+                    teams.appId(),
+                    teams.appSecret(),
+                    teams.enabled(),
+                    teams.tenantId(),
+                    teams.skipJwtValidation(),
+                    teams.allowedSenderIds());
+            return new io.jclaw.channel.teams.TeamsAdapter(config, webhookDispatcher);
+        }
+    }
 }

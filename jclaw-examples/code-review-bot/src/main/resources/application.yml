@@ -1,3 +1,4 @@
+# Set GITHUB_TOKEN env var for authenticated GitHub API access (otherwise anonymous, 60 req/hr)
 server:
   port: ${GATEWAY_PORT:8080}
 

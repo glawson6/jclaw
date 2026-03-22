@@ -5,7 +5,10 @@
       "Bash(jar xf:*)",
       "Bash(export JAVA_HOME=/Users/tap/.sdkman/candidates/java/current && gtimeout 15 ./mvnw spring-boot:run -pl jclaw-shell -q -o 2>&1; true)",
       "WebFetch(domain:java.testcontainers.org)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(jar tf:*)",
+      "Bash(export JAVA_HOME:*)",
+      "Bash(./mvnw test:*)"
     ]
   }
 }
