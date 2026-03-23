@@ -1,0 +1,76 @@
+services:
+  gateway:
+    image: tooling.taptech.net:8082/io.jclaw/jclaw-gateway-app:0.1.0-SNAPSHOT
+    container_name: jclaw-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms512m
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  cron-manager:
+    image: tooling.taptech.net:8082/io.jclaw/jclaw-cron-manager:0.1.0-SNAPSHOT
+    container_name: jclaw-cron-manager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CRON_MANAGER_PORT:-8090}:8090"
+    env_file: .env
+    environment:
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    volumes:
+      - ./data/cron-manager-db:/root/.jclaw/cron-manager-db
+    profiles:
+      - cron
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jclaw-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    profiles:
+      - ollama
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: jclaw-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/jclaw/.docker/config.json:/config.json:ro
+    command: --interval 300 --cleanup jclaw-gateway jclaw-cron-manager
+    environment:
+      - DOCKER_CONFIG=/
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"

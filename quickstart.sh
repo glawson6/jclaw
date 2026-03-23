@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 #
-# JClaw Quickstart — Docker-based zero-friction launcher
+# JClaw Quickstart — zero-friction launcher (local Java or Docker)
 #
-# Prerequisites: Docker (with Docker Compose)
+# Prerequisites: Java 21+ (preferred) or Docker
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/jclaw/jclaw/main/quickstart.sh | bash
 #   -- or --
-#   ./quickstart.sh              # build + start gateway (Docker)
-#   ./quickstart.sh --shell      # build + start interactive CLI shell (Docker)
+#   ./quickstart.sh              # build + start gateway (auto-detect: Java → Docker)
+#   ./quickstart.sh --local      # build + start gateway locally (requires Java 21)
+#   ./quickstart.sh --docker     # build + start gateway via Docker
+#   ./quickstart.sh --shell      # build + start interactive CLI shell
 #   ./quickstart.sh --cron-manager # also build + start the cron-manager sidecar
-#   ./quickstart.sh --force-build  # force rebuild Docker images
+#   ./quickstart.sh --force-build  # force rebuild
 #   ./quickstart.sh --reconfigure  # re-run interactive setup (provider, keys, channels)
 #
 set -euo pipefail
@@ -305,6 +307,135 @@ launch_shell() {
     echo ""
 
     docker compose -f "$compose_dir/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm cli
+}
+
+# ─── Local (Java) build + launch ─────────────────────────────────────────────
+
+build_local() {
+    header "Building JClaw (Local)"
+
+    local jar="$JCLAW_DIR/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
+
+    if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
+        info "Building JClaw from source with Maven..."
+        info "This may take several minutes on the first run (downloading dependencies + compiling)."
+        local start=$SECONDS
+        (cd "$JCLAW_DIR" && ./mvnw install -DskipTests 2>&1 | while IFS= read -r line; do
+            case "$line" in
+                *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
+                *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
+                *"--- "*":"*" ---"*) printf "${DIM}  ▸ %s${NC}\n" "$line" ;;
+                *"Downloading"*)    ;;
+                *"Downloaded"*)     ;;
+                *"[ERROR]"*)        printf "${RED}  %s${NC}\n" "$line" ;;
+                *"[WARNING]"*)      printf "${YELLOW}  %s${NC}\n" "$line" ;;
+            esac
+        done)
+        local elapsed=$(( SECONDS - start ))
+        local mins=$(( elapsed / 60 ))
+        local secs=$(( elapsed % 60 ))
+        if [ "$mins" -gt 0 ]; then
+            ok "Build complete (${mins}m ${secs}s)"
+        else
+            ok "Build complete (${secs}s)"
+        fi
+    else
+        ok "JClaw already built (use --force-build to rebuild)"
+    fi
+}
+
+build_shell_local() {
+    header "Building JClaw Shell (Local)"
+
+    local jar="$JCLAW_DIR/jclaw-shell/target/jclaw-shell-0.1.0-SNAPSHOT.jar"
+
+    if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
+        info "Building JClaw Shell from source..."
+        local start=$SECONDS
+        (cd "$JCLAW_DIR" && ./mvnw install -pl jclaw-shell -am -DskipTests 2>&1 | while IFS= read -r line; do
+            case "$line" in
+                *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
+                *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
+                *"--- "*":"*" ---"*) printf "${DIM}  ▸ %s${NC}\n" "$line" ;;
+                *"Downloading"*)    ;;
+                *"Downloaded"*)     ;;
+                *"[ERROR]"*)        printf "${RED}  %s${NC}\n" "$line" ;;
+                *"[WARNING]"*)      printf "${YELLOW}  %s${NC}\n" "$line" ;;
+            esac
+        done)
+        local elapsed=$(( SECONDS - start ))
+        ok "Shell build complete (${elapsed}s)"
+    else
+        ok "JClaw Shell already built (use --force-build to rebuild)"
+    fi
+}
+
+start_local() {
+    header "Starting JClaw (Local)"
+
+    # Source the .env file so Spring picks up the configured provider and keys
+    set -a
+    source "$ENV_FILE"
+    set +a
+
+    resolve_api_key
+
+    local port="${SERVER_PORT:-8080}"
+    echo "Starting gateway on http://localhost:${port}..."
+    print_security_info
+    echo ""
+    echo "Test with:"
+    print_api_curl_example "$port"
+    echo ""
+    echo "Or with httpie:"
+    print_api_httpie_example "$port"
+    echo ""
+
+    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl jclaw-gateway-app)
+}
+
+launch_shell_local() {
+    header "Starting JClaw Interactive Shell (Local)"
+
+    # Source the .env file
+    set -a
+    source "$ENV_FILE"
+    set +a
+
+    echo "Starting interactive shell..."
+    echo ""
+    printf "  ${DIM}Type 'help' for available commands${NC}\n"
+    printf "  ${DIM}Type 'chat hello' to talk to the agent${NC}\n"
+    printf "  ${DIM}Type 'onboard' to run the setup wizard${NC}\n"
+    echo ""
+
+    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl jclaw-shell -q)
+}
+
+build_cron_manager_local() {
+    header "Building Cron Manager (Local)"
+
+    local jar="$JCLAW_DIR/jclaw-cron-manager/target/jclaw-cron-manager-0.1.0-SNAPSHOT.jar"
+
+    if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
+        info "Building Cron Manager from source..."
+        local start=$SECONDS
+        (cd "$JCLAW_DIR" && ./mvnw install -pl jclaw-cron-manager -am -DskipTests 2>&1 | while IFS= read -r line; do
+            case "$line" in
+                *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
+                *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
+                *"--- "*":"*" ---"*) printf "${DIM}  ▸ %s${NC}\n" "$line" ;;
+                *"Downloading"*)    ;;
+                *"Downloaded"*)     ;;
+                *"[ERROR]"*)        printf "${RED}  %s${NC}\n" "$line" ;;
+                *"[WARNING]"*)      printf "${YELLOW}  %s${NC}\n" "$line" ;;
+            esac
+        done)
+        local elapsed=$(( SECONDS - start ))
+        ok "Cron Manager build complete (${elapsed}s)"
+    else
+        ok "Cron Manager already built (use --force-build to rebuild)"
+    fi
 }
 
 # ─── Env file resolution ─────────────────────────────────────────────────────
@@ -686,13 +817,19 @@ print_success() {
     echo "Health check:"
     printf "  ${BOLD}curl http://localhost:8080/api/health${NC}\n"
     echo ""
-    local compose_dir="${JCLAW_DIR}/docker-compose"
-    echo "View logs:"
-    printf "  ${BOLD}docker compose -f ${compose_dir}/docker-compose.yml logs -f gateway${NC}\n"
-    echo ""
-    echo "Stop:"
-    printf "  ${BOLD}docker compose -f ${compose_dir}/docker-compose.yml down${NC}\n"
-    echo ""
+    if [ "${RUN_MODE:-docker}" = "docker" ]; then
+        local compose_dir="${JCLAW_DIR}/docker-compose"
+        echo "View logs:"
+        printf "  ${BOLD}docker compose -f ${compose_dir}/docker-compose.yml logs -f gateway${NC}\n"
+        echo ""
+        echo "Stop:"
+        printf "  ${BOLD}docker compose -f ${compose_dir}/docker-compose.yml down${NC}\n"
+        echo ""
+    else
+        echo "Stop:"
+        printf "  ${BOLD}Ctrl+C${NC}\n"
+        echo ""
+    fi
     if [ -n "$TELEGRAM_BOT_USERNAME" ]; then
         echo "Telegram bot:"
         printf "  ${BOLD}https://t.me/${TELEGRAM_BOT_USERNAME}${NC}\n"
@@ -710,11 +847,14 @@ main() {
     local launch_mode=gateway
     local do_reconfigure=false
     local with_cron_manager=false
+    RUN_MODE=auto   # auto | local | docker
     FORCE_BUILD=false
 
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
+            --local)         RUN_MODE=local ;;
+            --docker)        RUN_MODE=docker ;;
             --shell)         launch_mode=shell ;;
             --cron-manager)  with_cron_manager=true ;;
             --force-build)   FORCE_BUILD=true ;;
@@ -722,12 +862,16 @@ main() {
             -h|--help|help)
                 echo "Usage: ./quickstart.sh [options]"
                 echo ""
-                echo "Docker-based zero-friction JClaw launcher."
+                echo "Zero-friction JClaw launcher (local Java or Docker)."
                 echo ""
                 echo "Options:"
+                echo "  --local          Run locally with Java 21 (no Docker required)"
+                echo "  --docker         Run via Docker Compose"
+                echo "  (default)        Auto-detect: use Java if available, fall back to Docker"
+                echo ""
                 echo "  --shell          Start the interactive CLI shell instead of the gateway"
                 echo "  --cron-manager   Also build and start the cron-manager sidecar"
-                echo "  --force-build    Force rebuild Docker images even if they exist"
+                echo "  --force-build    Force rebuild even if JARs/images already exist"
                 echo "  --reconfigure    Re-run interactive setup (provider, API keys, channels)"
                 echo "  --help           Print this help"
                 exit 0
@@ -743,14 +887,47 @@ main() {
     header "JClaw Quickstart"
     debug "JCLAW_DIR=$JCLAW_DIR  INSIDE_REPO=$INSIDE_REPO"
 
-    check_docker
+    # Auto-detect run mode: prefer local Java, fall back to Docker
+    if [ "$RUN_MODE" = "auto" ]; then
+        if check_java; then
+            RUN_MODE=local
+            ok "Auto-detected: running locally with Java"
+        elif command -v docker &>/dev/null && docker info &>/dev/null; then
+            RUN_MODE=docker
+            ok "Auto-detected: running with Docker (no Java 21+ found)"
+        else
+            err "Neither Java 21+ nor Docker found."
+            echo ""
+            echo "Install one of:"
+            echo "  Java 21:  curl -s https://get.sdkman.io | bash && sdk install java 21.0.9-oracle"
+            echo "  Docker:   https://docs.docker.com/desktop/"
+            exit 1
+        fi
+    elif [ "$RUN_MODE" = "local" ]; then
+        if ! check_java; then
+            err "Java 21+ is required for --local mode."
+            echo "Install with: curl -s https://get.sdkman.io | bash && sdk install java 21.0.9-oracle"
+            exit 1
+        fi
+    elif [ "$RUN_MODE" = "docker" ]; then
+        check_docker
+    fi
+
     clone_repo
 
     # Resolve .env file location (prompt on first run, read ~/.jclawrc on subsequent runs)
     resolve_env_file
 
-    # Reconfigure mode: full interactive re-setup
+    # Reconfigure mode: full interactive re-setup (Docker only — uses docker compose)
     if [ "$do_reconfigure" = true ]; then
+        if [ "$RUN_MODE" != "docker" ]; then
+            # reconfigure uses docker compose to restart — ensure Docker is available
+            if command -v docker &>/dev/null && docker info &>/dev/null; then
+                check_docker
+            else
+                warn "Reconfigure normally restarts Docker stack. Running config-only (no restart)."
+            fi
+        fi
         reconfigure
 
         local total_elapsed=$(( SECONDS - total_start ))
@@ -764,28 +941,45 @@ main() {
         return
     fi
 
-    if [ "$with_cron_manager" = true ]; then
-        build_cron_manager_image
-        # Enable cron-manager in .env
-        sed -i.bak "s|^CRON_MANAGER_ENABLED=.*|CRON_MANAGER_ENABLED=true|" "$ENV_FILE"
-        rm -f "$ENV_FILE.bak"
-        ok "Cron Manager enabled"
-    fi
-
-    if [ "$launch_mode" = "shell" ]; then
-        build_shell_image
-        launch_shell
-    else
-        build_image
-        setup_telegram
-        start_stack
+    # ─── Local mode ─────────────────────────────────────────────────────────
+    if [ "$RUN_MODE" = "local" ]; then
         if [ "$with_cron_manager" = true ]; then
-            local compose_dir="$JCLAW_DIR/docker-compose"
-            info "Starting cron-manager container..."
-            docker compose -f "$compose_dir/docker-compose.yml" --env-file "$ENV_FILE" --profile cron-manager up -d cron-manager
-            ok "Cron Manager running on http://localhost:${CRON_MANAGER_PORT:-8090}"
+            build_cron_manager_local
         fi
-        print_success
+
+        if [ "$launch_mode" = "shell" ]; then
+            build_shell_local
+            launch_shell_local
+        else
+            build_local
+            setup_telegram
+            start_local
+        fi
+
+    # ─── Docker mode ────────────────────────────────────────────────────────
+    else
+        if [ "$with_cron_manager" = true ]; then
+            build_cron_manager_image
+            sed -i.bak "s|^CRON_MANAGER_ENABLED=.*|CRON_MANAGER_ENABLED=true|" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+            ok "Cron Manager enabled"
+        fi
+
+        if [ "$launch_mode" = "shell" ]; then
+            build_shell_image
+            launch_shell
+        else
+            build_image
+            setup_telegram
+            start_stack
+            if [ "$with_cron_manager" = true ]; then
+                local compose_dir="$JCLAW_DIR/docker-compose"
+                info "Starting cron-manager container..."
+                docker compose -f "$compose_dir/docker-compose.yml" --env-file "$ENV_FILE" --profile cron-manager up -d cron-manager
+                ok "Cron Manager running on http://localhost:${CRON_MANAGER_PORT:-8090}"
+            fi
+            print_success
+        fi
     fi
 
     local total_elapsed=$(( SECONDS - total_start ))

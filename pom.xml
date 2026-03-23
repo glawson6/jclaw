@@ -57,6 +57,7 @@
         <module>jclaw-subscription</module>
         <module>jclaw-subscription-telegram</module>
         <module>jclaw-rest-cli-architect</module>
+        <module>jclaw-perplexity</module>
         <module>jclaw-spring-boot-starter</module>
         <module>jclaw-starters</module>
         <module>jclaw-gateway-app</module>

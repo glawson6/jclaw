@@ -1,0 +1,17 @@
+spring:
+  shell:
+    interactive:
+      enabled: true
+    script:
+      enabled: true
+  main:
+    banner-mode: "off"
+    web-application-type: none
+
+perplexity:
+  api-key: ${PERPLEXITY_API_KEY:}
+  default-model: ${PERPLEXITY_MODEL:sonar-pro}
+  default-preset: ${PERPLEXITY_PRESET:pro-search}
+  max-tokens: ${PERPLEXITY_MAX_TOKENS:4096}
+  temperature: ${PERPLEXITY_TEMPERATURE:0.2}
+  images-enabled: ${PERPLEXITY_IMAGES:false}
