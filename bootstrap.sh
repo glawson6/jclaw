@@ -112,11 +112,11 @@ ensure_java() {
 
 # ─── Step 3: Maven build ─────────────────────────────────────────────────────
 
-MARKER_FILE="$SCRIPT_DIR/jclaw-gateway-app/target/.jclaw-installed"
+MARKER_FILE="$SCRIPT_DIR/apps/jclaw-gateway-app/target/.jclaw-installed"
 
 needs_build() {
     # Check if the install marker exists and the gateway JAR is present
-    local gateway_jar="$SCRIPT_DIR/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
+    local gateway_jar="$SCRIPT_DIR/apps/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
     if [ -f "$MARKER_FILE" ] && [ -f "$gateway_jar" ]; then
         return 1  # no build needed
     fi
@@ -149,7 +149,7 @@ maven_build() {
     done)
 
     # Verify the build succeeded
-    local gateway_jar="$SCRIPT_DIR/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
+    local gateway_jar="$SCRIPT_DIR/apps/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
     if [ ! -f "$gateway_jar" ]; then
         err "Build failed — gateway JAR not found at $gateway_jar"
         echo ""
@@ -192,7 +192,7 @@ launch_shell() {
     printf "  ${DIM}Type 'onboard' to run the setup wizard${NC}\n"
     echo ""
 
-    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl jclaw-shell -q)
+    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl :jclaw-shell -q)
 }
 
 # ─── Help ─────────────────────────────────────────────────────────────────────

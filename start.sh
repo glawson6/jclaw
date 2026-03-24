@@ -155,8 +155,8 @@ ensure_image() {
         warn "Docker image for ${module} not found. Building..."
     fi
     ensure_java
-    info "Running: ./mvnw package k8s:build -pl ${module} -am -Pk8s -DskipTests"
-    (cd "$SCRIPT_DIR" && ./mvnw package k8s:build -pl "${module}" -am -Pk8s -DskipTests)
+    info "Running: ./mvnw package k8s:build -pl :${module} -am -Pk8s -DskipTests"
+    (cd "$SCRIPT_DIR" && ./mvnw package k8s:build -pl ":${module}" -am -Pk8s -DskipTests)
     ok "Docker image built: $image"
 }
 
@@ -199,7 +199,7 @@ cmd_shell() {
     header "JClaw Interactive Shell"
     load_env
     ensure_java
-    ensure_local_build "$SCRIPT_DIR/jclaw-shell/target/jclaw-shell-0.1.0-SNAPSHOT.jar"
+    ensure_local_build "$SCRIPT_DIR/apps/jclaw-shell/target/jclaw-shell-0.1.0-SNAPSHOT.jar"
 
     echo "Starting interactive shell..."
     echo ""
@@ -208,7 +208,7 @@ cmd_shell() {
     printf "  ${DIM}Type 'onboard' to run the setup wizard${NC}\n"
     echo ""
 
-    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl jclaw-shell -q)
+    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl :jclaw-shell -q)
 }
 
 cmd_cli() {
@@ -232,7 +232,7 @@ cmd_local() {
     load_env
     resolve_api_key
     ensure_java
-    ensure_local_build "$SCRIPT_DIR/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
+    ensure_local_build "$SCRIPT_DIR/apps/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
 
     echo "Starting gateway on http://localhost:${SERVER_PORT:-8080}..."
     print_security_info
@@ -244,7 +244,7 @@ cmd_local() {
     print_api_httpie_example "${SERVER_PORT:-8080}"
     echo ""
 
-    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl jclaw-gateway-app)
+    (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl :jclaw-gateway-app)
 }
 
 cmd_cron() {
@@ -285,7 +285,7 @@ cmd_cron() {
         resolve_api_key
         ensure_java
 
-        ensure_local_build "$SCRIPT_DIR/jclaw-cron-manager/target/jclaw-cron-manager-0.1.0-SNAPSHOT.jar"
+        ensure_local_build "$SCRIPT_DIR/apps/jclaw-cron-manager/target/jclaw-cron-manager-0.1.0-SNAPSHOT.jar"
 
         echo "Starting cron-manager on http://localhost:${JCLAW_CRON_MANAGER_PORT:-8090}..."
         print_security_info
@@ -302,7 +302,7 @@ cmd_cron() {
         printf "  ${DIM}Type 'cron-list' to list all jobs${NC}\n"
         echo ""
 
-        (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl jclaw-cron-manager)
+        (cd "$SCRIPT_DIR" && ./mvnw spring-boot:run -pl :jclaw-cron-manager)
     fi
 }
 

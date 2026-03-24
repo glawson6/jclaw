@@ -191,6 +191,16 @@
             </dependency>
             <dependency>
                 <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-invoice</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
+                <artifactId>jclaw-skill-creator</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jclaw</groupId>
                 <artifactId>jclaw-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>

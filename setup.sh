@@ -39,7 +39,7 @@ done
 
 # ─── Ensure we're in the project root ─────────────────────────────────────────
 
-if [ ! -f "pom.xml" ] || [ ! -d "jclaw-core" ]; then
+if [ ! -f "pom.xml" ] || [ ! -d "core/jclaw-core" ]; then
     err "Run this script from the JClaw project root directory."
     exit 1
 fi
@@ -149,7 +149,7 @@ launch_shell() {
     warn "After onboarding completes, restart the shell to activate your LLM configuration."
     echo ""
 
-    ./mvnw spring-boot:run -pl jclaw-shell -q
+    ./mvnw spring-boot:run -pl :jclaw-shell -q
 }
 
 launch_gateway() {
@@ -167,7 +167,7 @@ launch_gateway() {
     print_api_httpie_example 8080
     echo ""
 
-    ./mvnw spring-boot:run -pl jclaw-gateway-app -q
+    ./mvnw spring-boot:run -pl :jclaw-gateway-app -q
 }
 
 launch_cron_manager() {
@@ -187,7 +187,7 @@ launch_cron_manager() {
     printf "  ${DIM}Type 'cron-list' to list all jobs${NC}\n"
     echo ""
 
-    ./mvnw spring-boot:run -pl jclaw-cron-manager
+    ./mvnw spring-boot:run -pl :jclaw-cron-manager
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ main() {
         shell)        launch_shell ;;
         gateway)      launch_gateway ;;
         cron-manager) launch_cron_manager ;;
-        build-only)   ok "Build finished. Run with: ./mvnw spring-boot:run -pl jclaw-shell" ;;
+        build-only)   ok "Build finished. Run with: ./mvnw spring-boot:run -pl :jclaw-shell" ;;
     esac
 }
 

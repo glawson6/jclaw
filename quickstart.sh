@@ -169,9 +169,9 @@ build_image() {
     if check_java; then
         info "Building gateway Docker image with Maven + JKube..."
         info "This may take several minutes on the first run (downloading dependencies + compiling)."
-        debug "Running: ./mvnw package k8s:build -pl jclaw-gateway-app -am -Pk8s -DskipTests"
+        debug "Running: ./mvnw package k8s:build -pl :jclaw-gateway-app -am -Pk8s -DskipTests"
         local start=$SECONDS
-        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl jclaw-gateway-app -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
+        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl :jclaw-gateway-app -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
             # Show Maven phase transitions and key events
             case "$line" in
                 *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
@@ -219,9 +219,9 @@ build_shell_image() {
 
     if check_java; then
         info "Building shell Docker image with Maven + JKube..."
-        debug "Running: ./mvnw package k8s:build -pl jclaw-shell -am -Pk8s -DskipTests"
+        debug "Running: ./mvnw package k8s:build -pl :jclaw-shell -am -Pk8s -DskipTests"
         local start=$SECONDS
-        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl jclaw-shell -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
+        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl :jclaw-shell -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
             case "$line" in
                 *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
                 *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
@@ -262,9 +262,9 @@ build_cron_manager_image() {
 
     if check_java; then
         info "Building cron-manager Docker image with Maven + JKube..."
-        debug "Running: ./mvnw package k8s:build -pl jclaw-cron-manager -am -Pk8s -DskipTests"
+        debug "Running: ./mvnw package k8s:build -pl :jclaw-cron-manager -am -Pk8s -DskipTests"
         local start=$SECONDS
-        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl jclaw-cron-manager -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
+        (cd "$JCLAW_DIR" && ./mvnw package k8s:build -pl :jclaw-cron-manager -am -Pk8s -DskipTests 2>&1 | while IFS= read -r line; do
             case "$line" in
                 *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
                 *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
@@ -314,7 +314,7 @@ launch_shell() {
 build_local() {
     header "Building JClaw (Local)"
 
-    local jar="$JCLAW_DIR/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
+    local jar="$JCLAW_DIR/apps/jclaw-gateway-app/target/jclaw-gateway-app-0.1.0-SNAPSHOT.jar"
 
     if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
         info "Building JClaw from source with Maven..."
@@ -347,12 +347,12 @@ build_local() {
 build_shell_local() {
     header "Building JClaw Shell (Local)"
 
-    local jar="$JCLAW_DIR/jclaw-shell/target/jclaw-shell-0.1.0-SNAPSHOT.jar"
+    local jar="$JCLAW_DIR/apps/jclaw-shell/target/jclaw-shell-0.1.0-SNAPSHOT.jar"
 
     if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
         info "Building JClaw Shell from source..."
         local start=$SECONDS
-        (cd "$JCLAW_DIR" && ./mvnw install -pl jclaw-shell -am -DskipTests 2>&1 | while IFS= read -r line; do
+        (cd "$JCLAW_DIR" && ./mvnw install -pl :jclaw-shell -am -DskipTests 2>&1 | while IFS= read -r line; do
             case "$line" in
                 *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
                 *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;
@@ -391,7 +391,7 @@ start_local() {
     print_api_httpie_example "$port"
     echo ""
 
-    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl jclaw-gateway-app)
+    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl :jclaw-gateway-app)
 }
 
 launch_shell_local() {
@@ -409,18 +409,18 @@ launch_shell_local() {
     printf "  ${DIM}Type 'onboard' to run the setup wizard${NC}\n"
     echo ""
 
-    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl jclaw-shell -q)
+    (cd "$JCLAW_DIR" && ./mvnw spring-boot:run -pl :jclaw-shell -q)
 }
 
 build_cron_manager_local() {
     header "Building Cron Manager (Local)"
 
-    local jar="$JCLAW_DIR/jclaw-cron-manager/target/jclaw-cron-manager-0.1.0-SNAPSHOT.jar"
+    local jar="$JCLAW_DIR/apps/jclaw-cron-manager/target/jclaw-cron-manager-0.1.0-SNAPSHOT.jar"
 
     if [ "$FORCE_BUILD" = true ] || [ ! -f "$jar" ]; then
         info "Building Cron Manager from source..."
         local start=$SECONDS
-        (cd "$JCLAW_DIR" && ./mvnw install -pl jclaw-cron-manager -am -DskipTests 2>&1 | while IFS= read -r line; do
+        (cd "$JCLAW_DIR" && ./mvnw install -pl :jclaw-cron-manager -am -DskipTests 2>&1 | while IFS= read -r line; do
             case "$line" in
                 *"BUILD SUCCESS"*)  printf "${GREEN}  ▸ %s${NC}\n" "$line" ;;
                 *"BUILD FAILURE"*)  printf "${RED}  ▸ %s${NC}\n" "$line" ;;

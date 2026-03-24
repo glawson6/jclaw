@@ -15,7 +15,7 @@ export JAVA_HOME="${JAVA_HOME:-/Users/tap/.sdkman/candidates/java/21.0.9-oracle}
 
 echo "==> Building Docker image with JKube"
 ./mvnw package k8s:build \
-    -pl jclaw-gateway-app -am \
+    -pl :jclaw-gateway-app -am \
     -Pk8s -DskipTests
 
 GATEWAY_IMAGE="${IMAGE_PREFIX}/jclaw-gateway-app:${VERSION}"

@@ -128,7 +128,9 @@ public class JClawAutoConfiguration {
             ObjectProvider<ToolApprovalHandler> approvalHandlerProvider,
             ObjectProvider<AgentOrchestrationPort> orchestrationPortProvider) {
 
-        List<SkillDefinition> skills = skillLoader.loadBundled();
+        List<SkillDefinition> skills = skillLoader.loadConfigured(
+                properties.skills().allowBundled(),
+                properties.skills().workspaceDir());
 
         // Resolve tool loop config from properties
         var agentConfig = properties.agent().agents().getOrDefault(
