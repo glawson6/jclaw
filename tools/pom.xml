@@ -18,6 +18,5 @@
         <module>jaiclaw-perplexity</module>
         <module>jaiclaw-rest-cli-architect</module>
         <module>jaiclaw-skill-creator</module>
-        <module>jaiclaw-invoice</module>
     </modules>
 </project>

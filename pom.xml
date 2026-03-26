@@ -238,11 +238,6 @@
             </dependency>
             <dependency>
                 <groupId>io.jaiclaw</groupId>
-                <artifactId>jaiclaw-invoice</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.jaiclaw</groupId>
                 <artifactId>jaiclaw-skill-creator</artifactId>
                 <version>${project.version}</version>
             </dependency>
