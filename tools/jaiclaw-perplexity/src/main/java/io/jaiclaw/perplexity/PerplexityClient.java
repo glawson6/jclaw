@@ -8,6 +8,8 @@ import io.jaiclaw.perplexity.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -30,7 +32,7 @@ public class PerplexityClient {
     private final ObjectMapper mapper;
 
     public PerplexityClient(String apiKey) {
-        this(apiKey, HttpClient.newBuilder()
+        this(apiKey, ProxyAwareHttpClientFactory.newBuilder()
                 .connectTimeout(Duration.ofSeconds(60))
                 .build());
     }

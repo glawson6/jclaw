@@ -6,6 +6,8 @@ import io.jaiclaw.channel.ChannelAdapter;
 import io.jaiclaw.channel.ChannelRegistry;
 import io.jaiclaw.config.JaiClawProperties;
 import io.jaiclaw.core.agent.*;
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory.ProxyConfig;
 import io.jaiclaw.core.skill.SkillDefinition;
 import io.jaiclaw.memory.InMemorySearchManager;
 import io.jaiclaw.memory.MemorySearchManager;
@@ -16,6 +18,8 @@ import io.jaiclaw.tools.ToolRegistry;
 import io.jaiclaw.tools.bridge.embabel.AgentOrchestrationPort;
 import io.jaiclaw.tools.builtin.BuiltinTools;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,8 +29,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.client.RestClientCustomizer;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
+import java.net.http.HttpClient;
 import java.util.List;
 
 /**
@@ -42,6 +51,81 @@ import java.util.List;
 @AutoConfigureAfter(name = "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration")
 @EnableConfigurationProperties(JaiClawProperties.class)
 public class JaiClawAutoConfiguration {
+
+    private static final Logger log = LoggerFactory.getLogger(JaiClawAutoConfiguration.class);
+
+    /**
+     * Resolve proxy config from explicit YAML properties or environment variables.
+     * Returns null if no proxy is configured.
+     */
+    private static ProxyConfig resolveProxyConfig(JaiClawProperties properties) {
+        var proxyProps = properties.http().proxy();
+        if (proxyProps.isConfigured()) {
+            return new ProxyConfig(proxyProps.host(), proxyProps.port(),
+                    proxyProps.username(), proxyProps.password());
+        }
+        return ProxyAwareHttpClientFactory.resolveProxy();
+    }
+
+    /**
+     * Customizes the Spring Boot {@link org.springframework.web.client.RestClient.Builder}
+     * with proxy settings. This is picked up by Spring AI's provider auto-configurations
+     * (Anthropic, OpenAI, Ollama) which receive a {@code RestClient.Builder} via
+     * {@code ObjectProvider} — the builder is a prototype bean that gets customized
+     * by all registered {@code RestClientCustomizer} beans before use.
+     *
+     * <p>Depends on {@link ProxyFactoryConfigurer} to ensure the static factory
+     * is configured before this customizer runs.
+     */
+    @Bean
+    RestClientCustomizer proxyRestClientCustomizer(ProxyFactoryConfigurer configurer) {
+        return builder -> {
+            ProxyConfig resolved = ProxyAwareHttpClientFactory.resolveProxy();
+            if (resolved == null) return;
+
+            // JdkClientHttpRequestFactory wraps a java.net.http.HttpClient for use
+            // with Spring's RestClient — proxy and auth are baked into the HttpClient
+            HttpClient proxyHttpClient = ProxyAwareHttpClientFactory.create();
+            builder.requestFactory(new JdkClientHttpRequestFactory(proxyHttpClient));
+        };
+    }
+
+    /**
+     * Configures {@link ProxyAwareHttpClientFactory} for non-Spring HTTP clients
+     * (tools, MCP providers, etc.) and sets a global {@link Authenticator} for
+     * proxy auth if credentials are provided. Runs at bean construction time so
+     * the factory is configured before any tool beans that use it eagerly.
+     */
+    @Bean
+    ProxyFactoryConfigurer proxyFactoryConfigurer(JaiClawProperties properties) {
+        return new ProxyFactoryConfigurer(properties);
+    }
+
+    /**
+     * Configures {@link ProxyAwareHttpClientFactory} and global authenticator
+     * as early as possible during bean creation.
+     */
+    static class ProxyFactoryConfigurer {
+        ProxyFactoryConfigurer(JaiClawProperties properties) {
+            ProxyConfig resolved = resolveProxyConfig(properties);
+            if (resolved == null) return;
+
+            ProxyAwareHttpClientFactory.configure(resolved);
+
+            if (resolved.username() != null && !resolved.username().isBlank()) {
+                Authenticator.setDefault(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(
+                                resolved.username(),
+                                resolved.password() != null ? resolved.password().toCharArray() : new char[0]);
+                    }
+                });
+            }
+
+            log.info("HTTP proxy configured: {}:{}", resolved.host(), resolved.port());
+        }
+    }
 
     @Bean
     @ConditionalOnMissingBean

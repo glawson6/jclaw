@@ -16,7 +16,8 @@ public record JaiClawProperties(
         ModelsProperties models,
         SessionProperties session,
         McpServerProperties mcpServers,
-        ChannelsProperties channels
+        ChannelsProperties channels,
+        HttpProperties http
 ) {
     public JaiClawProperties {
         if (identity == null) identity = IdentityProperties.DEFAULT;
@@ -29,5 +30,6 @@ public record JaiClawProperties(
         if (session == null) session = SessionProperties.DEFAULT;
         if (mcpServers == null) mcpServers = McpServerProperties.DEFAULT;
         if (channels == null) channels = ChannelsProperties.DEFAULT;
+        if (http == null) http = HttpProperties.DEFAULT;
     }
 }

@@ -6,6 +6,8 @@ import io.jaiclaw.core.tool.ToolProfile;
 import io.jaiclaw.core.tool.ToolResult;
 import io.jaiclaw.tools.ToolCatalog;
 
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -38,7 +40,7 @@ public class WebFetchTool extends AbstractBuiltinTool {
     private final HttpClient httpClient;
 
     public WebFetchTool() {
-        this(HttpClient.newBuilder()
+        this(ProxyAwareHttpClientFactory.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build());

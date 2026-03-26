@@ -543,6 +543,9 @@ The `--reconfigure` flag in `quickstart.sh` also includes a security step.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `HTTPS_PROXY` | No | Proxy URL for HTTPS traffic (e.g. `http://user:pass@proxy:8080`) — auto-detected |
+| `HTTP_PROXY` | No | Proxy URL for HTTP traffic (fallback if `HTTPS_PROXY` not set) — auto-detected |
+| `NO_PROXY` | No | Comma-separated hosts that bypass the proxy (e.g. `localhost,127.0.0.1`) |
 | `JAVA_HOME` | Yes | Path to Java 21 JDK |
 | `JAICLAW_HOME` | No | Config directory override (default: `~/.jaiclaw/`) |
 | `JAICLAW_ENV_FILE` | No | Path to `.env` file (default: `docker-compose/.env`). Auto-set by `~/.jaiclawrc`. |
@@ -744,6 +747,12 @@ The adapter will call `setWebhook` on startup to register with Telegram.
 ---
 
 ## Troubleshooting
+
+### HTTP proxy not working
+- Verify env vars: `echo $HTTPS_PROXY` — must be a full URL like `http://proxy:8080`
+- Check startup log for `HTTP proxy configured: host:port` message
+- Explicit YAML config (`jaiclaw.http.proxy.*`) takes precedence over env vars
+- Spring AI providers use `RestClientCustomizer`; built-in tools and MCP clients use `ProxyAwareHttpClientFactory`
 
 ### Nexus timeouts during build
 ```bash

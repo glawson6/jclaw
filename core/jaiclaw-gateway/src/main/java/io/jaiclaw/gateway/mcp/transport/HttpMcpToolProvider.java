@@ -9,6 +9,8 @@ import io.jaiclaw.core.tenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -42,7 +44,7 @@ public class HttpMcpToolProvider implements McpToolProvider {
         this.description = description != null ? description : serverName;
         this.url = url;
         this.authToken = authToken;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = ProxyAwareHttpClientFactory.create();
     }
 
     /**

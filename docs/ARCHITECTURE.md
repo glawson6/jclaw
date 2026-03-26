@@ -467,6 +467,7 @@ env:
 | SMS adapter (Twilio)             | Done         | `jaiclaw-channel-sms`          |
 | Standalone gateway app           | Done         | `jaiclaw-gateway-app`          |
 | Docker image build (JKube)       | Done         | `-Pk8s` profile in POMs      |
+| HTTP proxy support               | Done         | `jaiclaw-core` + `jaiclaw-config` + starter |
 | **Helm chart**                   | **Needed**   | `helm/spring-boot-app/`      |
 | **Redis session store**          | **Planned**  | `jaiclaw-agent` (swap in-mem)  |
 | **Kafka event bus**              | **Optional** | cross-cutting                |
@@ -502,6 +503,8 @@ ChatClientAutoConfiguration           ─── creates ──→  ChatClient.Bu
 ```
 JaiClawAutoConfiguration
   │
+  ├── proxyFactoryConfigurer    ProxyFactoryConfigurer (configures ProxyAwareHttpClientFactory)
+  ├── proxyRestClientCustomizer RestClientCustomizer (proxy-aware JdkClientHttpRequestFactory)
   ├── toolRegistry            ToolRegistry (+ built-in tools)
   ├── sessionManager          SessionManager
   ├── skillLoader             SkillLoader (loads bundled skills from classpath)
@@ -609,6 +612,13 @@ jaiclaw:
       account-sid: ${TWILIO_ACCOUNT_SID:}
       auth-token: ${TWILIO_AUTH_TOKEN:}
       from-number: ${TWILIO_FROM_NUMBER:}
+  # http:
+  #   proxy:
+  #     host: ${HTTP_PROXY_HOST:}
+  #     port: ${HTTP_PROXY_PORT:0}
+  #     username: ${HTTP_PROXY_USERNAME:}
+  #     password: ${HTTP_PROXY_PASSWORD:}
+  #     non-proxy-hosts: ${NO_PROXY:localhost,127.0.0.1}
 
 spring:
   ai:

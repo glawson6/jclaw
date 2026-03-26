@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -51,7 +53,7 @@ public class SseMcpToolProvider implements McpToolProvider, DisposableBean {
         this.serverName = serverName;
         this.description = description != null ? description : serverName;
         this.url = url;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = ProxyAwareHttpClientFactory.create();
     }
 
     /**

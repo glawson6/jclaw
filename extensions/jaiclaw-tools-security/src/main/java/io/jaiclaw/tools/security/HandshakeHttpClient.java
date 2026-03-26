@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.jaiclaw.core.http.ProxyAwareHttpClientFactory;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -34,7 +36,7 @@ public class HandshakeHttpClient {
 
     public HandshakeHttpClient(String baseUrl) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = ProxyAwareHttpClientFactory.create();
     }
 
     /**

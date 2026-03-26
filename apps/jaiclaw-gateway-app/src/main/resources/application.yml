@@ -18,6 +18,16 @@ jaiclaw:
           profile: coding
   tools:
     profile: coding
+  # --- HTTP Proxy ---
+  # Option 1: Set HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars (auto-detected)
+  # Option 2: Explicit config below (takes precedence over env vars)
+  #  http:
+  #    proxy:
+  #      host: ${HTTP_PROXY_HOST:}
+  #      port: ${HTTP_PROXY_PORT:0}
+  #      username: ${HTTP_PROXY_USERNAME:}
+  #      password: ${HTTP_PROXY_PASSWORD:}
+  #      non-proxy-hosts: ${NO_PROXY:localhost,127.0.0.1}
   skills:
     allow-bundled:
       - "*"
