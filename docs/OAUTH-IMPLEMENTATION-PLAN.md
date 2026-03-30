@@ -23,7 +23,21 @@ A provider credential management system that:
 3. Supports PKCE authorization code and device code flows
 4. Rotates credentials across sessions (round-robin with cooldowns)
 5. Detects remote/headless environments and falls back to manual URL paste
-6. Integrates with the existing `jaiclaw-security` and `jaiclaw-shell` modules
+6. Syncs credentials from external CLIs (Claude CLI, Codex CLI, Qwen CLI, MiniMax CLI)
+7. Supports multi-agent credential inheritance (sub-agents adopt from main agent)
+8. Resolves secrets via env vars, files, or exec commands (SecretRef)
+9. Full read/write compatibility with OpenClaw's `auth-profiles.json` format
+10. Integrates with the existing `jaiclaw-security` and `jaiclaw-shell` modules
+
+### Resolved Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| OpenClaw format compat | **Full read/write** | Shared `auth-profiles.json` across both projects |
+| SecretRef | **Included in v1** | Env var, file, and exec backends |
+| External CLI sync | **Included** | Claude CLI, Codex CLI, Qwen CLI, MiniMax CLI |
+| Multi-agent inheritance | **Included** | Sub-agents inherit/adopt from main agent |
+| Browser opening | **Platform-specific** | `open` (macOS), `xdg-open` (Linux), `Desktop.browse()` fallback |
 
 ---
 
@@ -37,19 +51,19 @@ The OAuth credential system spans three layers:
 jaiclaw-core (pure Java — new types)
   └─ AuthProfileCredential (sealed interface)
   └─ AuthProfileStore (record)
-  └─ CredentialState, ProfileUsageStats, etc.
+  └─ SecretRef, CredentialState, ProfileUsageStats, etc.
 
-jaiclaw-identity (extended — credential store + refresh + OAuth flows)
-  └─ AuthProfileStoreManager (file I/O, locking, merge)
+jaiclaw-identity (extended — credential store + refresh + OAuth flows + CLI sync)
+  └─ AuthProfileStoreManager (file I/O, locking, merge, multi-agent)
+  └─ SecretRefResolver (env, file, exec backends)
   └─ TokenRefresher SPI + provider impls
   └─ OAuthFlowManager (PKCE + device code)
+  └─ ExternalCliSync (Claude, Codex, Qwen, MiniMax)
   └─ SessionAuthProfileResolver (round-robin override)
 
 jaiclaw-spring-boot-starter (auto-config wiring)
   └─ JaiClawIdentityAutoConfiguration (new, after Gateway)
 ```
-
-**Rationale:** The identity module already handles "who is this user" — OAuth credentials answer "how does this user authenticate with upstream providers." The two concerns are complementary and share the same file-store patterns.
 
 ### Package Structure
 
@@ -64,16 +78,37 @@ io.jaiclaw.core.auth/                    ← new package in jaiclaw-core
   AuthProfileFailureReason.java           (enum)
   CredentialState.java                    (enum: VALID, EXPIRED, MISSING, INVALID)
   CredentialEligibility.java              (record: eligible + reasonCode)
+  SecretRef.java                          (record: source + provider + id)
+  SecretRefSource.java                    (enum: ENV, FILE, EXEC)
 
 io.jaiclaw.identity.auth/                 ← new package in jaiclaw-identity
   AuthProfileStoreManager.java            (load/save/merge with file locking)
-  AuthProfileStoreSerializer.java         (Jackson ser/deser for sealed types)
+  AuthProfileStoreSerializer.java         (Jackson ser/deser with OpenClaw aliases)
   CredentialStateEvaluator.java           (pure functions: expiry check, eligibility)
   TokenRefresher.java                     (SPI interface)
   GenericOAuthTokenRefresher.java         (standard refresh_token grant)
   ProviderTokenRefresherRegistry.java     (dispatches to provider-specific refreshers)
   AuthProfileResolver.java               (resolves API key/token for a profile ID)
-  SessionAuthProfileOverride.java         (round-robin rotation per session)
+  ResolvedCredential.java                 (record: apiKey + provider + email)
+  SessionAuthProfileResolver.java         (round-robin rotation per session)
+  SessionAuthState.java                   (record: override + source + compactionCount)
+
+io.jaiclaw.identity.secret/               ← new package in jaiclaw-identity
+  SecretRefResolver.java                  (dispatches to source-specific backends)
+  EnvSecretProvider.java                  (reads env vars, validates names)
+  FileSecretProvider.java                 (reads JSON/single-value files, validates perms)
+  ExecSecretProvider.java                 (spawns command, reads JSON from stdout)
+  SecretProviderConfig.java               (config record for each provider)
+  SecretRefResolveCache.java              (per-cycle cache to avoid re-reads)
+
+io.jaiclaw.identity.sync/                 ← new package in jaiclaw-identity
+  ExternalCliSyncManager.java             (orchestrates sync from all CLIs)
+  ClaudeCliCredentialReader.java          (reads ~/.claude/.credentials.json or macOS Keychain)
+  CodexCliCredentialReader.java           (reads ~/.codex/auth.json or macOS Keychain)
+  QwenCliCredentialReader.java            (reads ~/.qwen/oauth_creds.json)
+  MiniMaxCliCredentialReader.java         (reads ~/.minimax/oauth_creds.json)
+  KeychainReader.java                     (macOS `security` command wrapper)
+  CachedCredentialReader.java             (TTL-based in-process cache wrapper)
 
 io.jaiclaw.identity.oauth/                ← new package in jaiclaw-identity
   OAuthFlowManager.java                  (orchestrates PKCE + device code flows)
@@ -82,8 +117,10 @@ io.jaiclaw.identity.oauth/                ← new package in jaiclaw-identity
   DeviceCodeFlow.java                    (polling loop)
   OAuthCallbackServer.java               (lightweight HTTP server for redirect)
   RemoteEnvironmentDetector.java          (SSH/VPS/Codespaces detection)
+  BrowserLauncher.java                    (platform-specific open URL)
   OAuthFlowResult.java                   (record: tokens + email + metadata)
   OAuthProviderConfig.java               (record: authorizeUrl, tokenUrl, scopes, etc.)
+  OAuthFlowType.java                     (enum: AUTHORIZATION_CODE, DEVICE_CODE)
 
 io.jaiclaw.identity.oauth.provider/       ← provider-specific configs
   ChutesOAuthProvider.java
@@ -99,10 +136,10 @@ io.jaiclaw.identity.oauth.provider/       ← provider-specific configs
 
 **Goal:** Define the credential model as pure Java records/sealed interfaces with zero Spring dependency.
 
-### Types to Add
+### 1a. Sealed Credential Hierarchy
 
 ```java
-// Sealed credential hierarchy
+// Sealed credential type — matches OpenClaw's "type" discriminator
 public sealed interface AuthProfileCredential
     permits ApiKeyCredential, TokenCredential, OAuthCredential {
     String provider();
@@ -110,167 +147,569 @@ public sealed interface AuthProfileCredential
 }
 
 public record ApiKeyCredential(
-    String provider, String key, String keyRef,
-    String email, Map<String, String> metadata
+    String provider,
+    String key,           // inline plaintext (nullable if keyRef set)
+    SecretRef keyRef,     // indirect reference (nullable if key set)
+    String email,
+    Map<String, String> metadata
 ) implements AuthProfileCredential {}
 
 public record TokenCredential(
-    String provider, String token, String tokenRef,
-    Long expires, String email
+    String provider,
+    String token,         // inline plaintext (nullable if tokenRef set)
+    SecretRef tokenRef,   // indirect reference (nullable if token set)
+    Long expires,         // ms-since-epoch (nullable = no expiry)
+    String email
 ) implements AuthProfileCredential {}
 
 public record OAuthCredential(
-    String provider, String access, String refresh,
-    long expires, String email, String clientId,
-    String accountId, String projectId, String enterpriseUrl
+    String provider,
+    String access,        // access token (required)
+    String refresh,       // refresh token (required)
+    long expires,         // ms-since-epoch (required)
+    String email,
+    String clientId,      // stored for refresh (nullable)
+    String accountId,     // provider-specific (nullable)
+    String projectId,     // Google Cloud project (nullable)
+    String enterpriseUrl  // custom base URL (nullable)
 ) implements AuthProfileCredential {}
 ```
 
+### 1b. SecretRef
+
 ```java
-// Store structure
+public enum SecretRefSource { ENV, FILE, EXEC }
+
+public record SecretRef(
+    SecretRefSource source,
+    String provider,      // named provider config or "default"
+    String id             // env var name, JSON pointer, or command ref ID
+) {}
+```
+
+### 1c. Store Structure
+
+```java
 public record AuthProfileStore(
     int version,
-    Map<String, AuthProfileCredential> profiles,
-    Map<String, List<String>> order,       // provider → ordered profileIds
-    Map<String, String> lastGood,          // provider → last-known-good profileId
-    Map<String, ProfileUsageStats> usageStats
-) {}
+    Map<String, AuthProfileCredential> profiles,     // profileId → credential
+    Map<String, List<String>> order,                 // provider → ordered profileIds
+    Map<String, String> lastGood,                    // provider → last-known-good profileId
+    Map<String, ProfileUsageStats> usageStats        // profileId → stats
+) {
+    public static final int CURRENT_VERSION = 1;
 
-// Usage tracking per profile
+    public static AuthProfileStore empty() {
+        return new AuthProfileStore(CURRENT_VERSION, Map.of(), Map.of(), Map.of(), Map.of());
+    }
+}
+
 public record ProfileUsageStats(
-    Long lastUsed, Long cooldownUntil, Long disabledUntil,
+    Long lastUsed,
+    Long cooldownUntil,
+    Long disabledUntil,
     AuthProfileFailureReason disabledReason,
-    int errorCount, Map<AuthProfileFailureReason, Integer> failureCounts,
+    int errorCount,
+    Map<AuthProfileFailureReason, Integer> failureCounts,
     Long lastFailureAt
 ) {}
+```
 
-// Failure reasons
+### 1d. Enums and Result Types
+
+```java
 public enum AuthProfileFailureReason {
     AUTH, AUTH_PERMANENT, FORMAT, OVERLOADED, RATE_LIMIT,
     BILLING, TIMEOUT, MODEL_NOT_FOUND, SESSION_EXPIRED, UNKNOWN
 }
 
-// Expiry evaluation
 public enum CredentialState { VALID, EXPIRED, MISSING, INVALID }
 
-public record CredentialEligibility(boolean eligible, String reasonCode) {}
+public record CredentialEligibility(boolean eligible, String reasonCode) {
+    public static final String OK = "ok";
+    public static final String MISSING_CREDENTIAL = "missing_credential";
+    public static final String INVALID_EXPIRES = "invalid_expires";
+    public static final String EXPIRED = "expired";
+    public static final String UNRESOLVED_REF = "unresolved_ref";
+}
 ```
 
-### Profile ID Convention
+### 1e. Profile ID Convention
 
-`"{provider}:{name}"` — e.g., `"anthropic:default"`, `"openai-codex:user@example.com"`.
+`"{provider}:{name}"` — e.g. `"anthropic:default"`, `"openai-codex:user@example.com"`, `"anthropic:claude-cli"`.
 
 ---
 
-## Phase 2: Store Manager (jaiclaw-identity)
+## Phase 2: Serialization (jaiclaw-identity)
 
-**Goal:** File-based credential persistence with locking, legacy migration, and merge semantics.
+**Goal:** Jackson ser/deser for the sealed `AuthProfileCredential` with full OpenClaw format compatibility.
+
+### Jackson Annotations on Sealed Interface
+
+```java
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = ApiKeyCredential.class, name = "api_key"),
+    @JsonSubTypes.Type(value = TokenCredential.class, name = "token"),
+    @JsonSubTypes.Type(value = OAuthCredential.class, name = "oauth")
+})
+public sealed interface AuthProfileCredential ...
+```
+
+### OpenClaw Alias Handling
+
+The `AuthProfileStoreSerializer` handles these OpenClaw compatibility rules:
+
+| OpenClaw Field | JaiClaw Field | Rule |
+|----------------|---------------|------|
+| `mode` | `type` | Accept `mode` as alias for `type` on read |
+| `apiKey` | `key` | Accept `apiKey` as alias for `key` in `ApiKeyCredential` |
+| `${ENV_VAR}` inline string | `SecretRef` | Auto-coerce `${VAR}` to `SecretRef(ENV, "default", "VAR")` |
+
+On save:
+- If `keyRef` is present, strip inline `key` from JSON output (secrets stored by ref)
+- If `tokenRef` is present, strip inline `token` from JSON output
+
+Implementation uses a custom `JsonDeserializer<AuthProfileCredential>` that:
+1. Reads the JSON tree
+2. Checks for `type` or `mode` field
+3. Handles `apiKey` → `key` alias
+4. Coerces `${VAR}` strings to `SecretRef`
+5. Delegates to the appropriate record constructor
+
+---
+
+## Phase 3: Store Manager (jaiclaw-identity)
+
+**Goal:** File-based credential persistence with locking, merge, and multi-agent inheritance.
 
 ### File Locations
 
-| File | Path |
-|------|------|
-| Primary store | `~/.jaiclaw/agents/{agentId}/auth-profiles.json` |
-| Lock file | `~/.jaiclaw/agents/{agentId}/auth-profiles.json.lock` |
-| Base dir override | `$JAICLAW_STATE_DIR` env var |
+| File | Path | Override Env |
+|------|------|-------------|
+| Main agent store | `~/.jaiclaw/agents/{agentId}/auth-profiles.json` | `JAICLAW_STATE_DIR` |
+| Sub-agent store | `~/.jaiclaw/agents/{agentId}/auth-profiles.json` | `JAICLAW_AGENT_DIR` |
+| Lock file | `{store-path}.lock` | — |
+| Legacy store | `~/.jaiclaw/agents/{agentId}/auth.json` | — |
 
 ### AuthProfileStoreManager
 
 ```java
 public class AuthProfileStoreManager {
-    // Load: read JSON → coerce → validate → return
-    public AuthProfileStore load(Path agentDir);
 
-    // Save: strip inline secrets if ref exists → lock → write
+    // --- Loading ---
+
+    // Load store for main agent (syncs external CLI creds)
+    public AuthProfileStore loadMainStore();
+
+    // Load store for a specific agent dir
+    public AuthProfileStore loadForAgent(Path agentDir);
+
+    // Load merged view: main + sub-agent (sub overrides main)
+    public AuthProfileStore loadForRuntime(Path agentDir);
+
+    // --- Saving ---
+
+    // Save store (strips inline secrets where ref exists, under lock)
     public void save(Path agentDir, AuthProfileStore store);
 
-    // Merge: agent store overrides main store (shallow merge)
-    public AuthProfileStore merge(AuthProfileStore base, AuthProfileStore override);
+    // --- Mutations (load + modify + save under lock) ---
 
-    // Upsert: load → set profile → save (under lock)
     public void upsertProfile(Path agentDir, String profileId, AuthProfileCredential credential);
-
-    // Order management
+    public void removeProfile(Path agentDir, String profileId);
     public void setProfileOrder(Path agentDir, String provider, List<String> order);
     public void markProfileGood(Path agentDir, String provider, String profileId);
+
+    // --- Merge ---
+
+    // Sub-agent overrides main (shallow merge per map)
+    public AuthProfileStore merge(AuthProfileStore base, AuthProfileStore override);
+
+    // --- Multi-agent ---
+
+    // Sync credential to all sibling agent dirs (best-effort)
+    public void syncToSiblings(Path primaryAgentDir, String profileId, AuthProfileCredential credential);
+
+    // Adopt newer credential from main agent (pre-refresh check)
+    public Optional<OAuthCredential> adoptFromMain(Path subAgentDir, String profileId);
 }
 ```
 
-### File Locking Strategy
+### File Locking
 
-Use `java.nio.channels.FileLock` via `FileChannel`:
-- Exclusive lock for writes
-- Retry with exponential backoff (10 retries, 100ms base, 30s stale timeout)
-- Lock file is separate from data file (`auth-profiles.json.lock`)
+```java
+public class AuthProfileFileLock {
+    private static final int MAX_RETRIES = 10;
+    private static final long BASE_DELAY_MS = 100;
+    private static final long MAX_DELAY_MS = 10_000;
+    private static final long STALE_TIMEOUT_MS = 30_000;
 
-### Serialization
+    // Acquire exclusive lock with exponential backoff
+    public static <T> T withLock(Path lockFile, Supplier<T> action);
+    public static void withLock(Path lockFile, Runnable action);
+}
+```
 
-Jackson polymorphic deserialization for the sealed `AuthProfileCredential`:
-- `@JsonTypeInfo(use = Id.NAME, property = "type")`
-- `@JsonSubTypes` on the sealed interface
-- Alias `"mode"` → `"type"` and `"apiKey"` → `"key"` for OpenClaw compat (if cross-compat needed)
+Uses `java.nio.channels.FileChannel.tryLock()` with retry. Lock file is `{storePath}.lock` (separate from data file). Stale lock detection: if lock file `lastModified` > `STALE_TIMEOUT_MS` ago, delete and retry.
+
+### Merge Semantics
+
+```java
+public AuthProfileStore merge(AuthProfileStore base, AuthProfileStore override) {
+    // Empty override is a no-op
+    if (override.profiles().isEmpty() && override.order().isEmpty()
+            && override.lastGood().isEmpty() && override.usageStats().isEmpty()) {
+        return base;
+    }
+    return new AuthProfileStore(
+        Math.max(base.version(), override.version()),
+        mergeMaps(base.profiles(), override.profiles()),     // override wins
+        mergeMaps(base.order(), override.order()),
+        mergeMaps(base.lastGood(), override.lastGood()),
+        mergeMaps(base.usageStats(), override.usageStats())
+    );
+}
+```
+
+### Multi-Agent Inheritance Flow
+
+```
+Sub-agent first boot (no auth-profiles.json)
+  → loadForAgent() copies main agent's store to sub-agent dir
+
+Every OAuth resolution for sub-agent
+  → adoptFromMain() checks if main has fresher token; copies proactively
+
+OAuth refresh fails for sub-agent
+  → Fallback: check main agent for non-expired token; copy and use
+
+New OAuth login completes
+  → syncToSiblings() writes credential to all sibling agent dirs
+
+Runtime (gateway startup)
+  → loadForRuntime() merges main + sub-agent (sub overrides main)
+```
+
+### Legacy Migration
+
+On first `load()`:
+1. If `auth-profiles.json` doesn't exist, check for `auth.json` (legacy flat format)
+2. Migrate each entry to profile ID `"{provider}:default"`
+3. Save as `auth-profiles.json`, delete `auth.json`
 
 ---
 
-## Phase 3: Credential Resolution & Refresh (jaiclaw-identity)
+## Phase 4: SecretRef Resolution (jaiclaw-identity)
 
-**Goal:** Transparent credential resolution — callers ask for "the API key for profile X" and get back a valid token.
+**Goal:** Resolve indirect secret references from env vars, files, or exec commands.
+
+### SecretRefResolver
+
+```java
+public class SecretRefResolver {
+    // Resolve a SecretRef to its plaintext value
+    public String resolve(SecretRef ref);
+
+    // Resolve inline key: returns value directly, or resolves ${VAR} shorthand
+    public String resolveInlineOrRef(String inlineValue, SecretRef ref);
+}
+```
+
+### Three Source Backends
+
+#### ENV — Environment Variable
+
+```java
+public class EnvSecretProvider {
+    // Validates var name: ^[A-Z][A-Z0-9_]{0,127}$
+    // Reads System.getenv(id)
+    // Supports optional allowlist from provider config
+    public String resolve(String id, SecretProviderConfig config);
+}
+```
+
+#### FILE — File-backed Secret
+
+```java
+public class FileSecretProvider {
+    // Modes: "json" (default) or "singleValue"
+    // JSON mode: id is a JSON Pointer (e.g. "/providers/openai/apiKey")
+    // singleValue mode: reads entire file content as the secret
+    // Validates: absolute path, not world-readable, not symlink (unless allowed)
+    // Default timeout: 5000ms, max: 1MB
+    public String resolve(String id, SecretProviderConfig config);
+}
+```
+
+#### EXEC — External Command
+
+```java
+public class ExecSecretProvider {
+    // Spawns command with stdin JSON: { protocolVersion: 1, provider: "...", ids: [...] }
+    // Expects stdout JSON: { protocolVersion: 1, values: { id: value }, errors: { id: { message } } }
+    // Command must be absolute path, owned by current user
+    // Default timeout: 5000ms, max output: 1MB
+    public String resolve(String id, SecretProviderConfig config);
+}
+```
+
+### SecretProviderConfig
+
+```java
+public record SecretProviderConfig(
+    SecretRefSource source,
+    String name,                    // provider alias
+    // ENV-specific
+    List<String> allowlist,         // permitted env var names (null = any)
+    // FILE-specific
+    String path,                    // absolute file path
+    String mode,                    // "json" or "singleValue"
+    boolean allowSymlinkPath,       // default false
+    long timeoutMs,                 // default 5000
+    long maxBytes,                  // default 1MB
+    // EXEC-specific
+    String command,                 // absolute command path
+    List<String> args,              // command arguments
+    boolean jsonOnly,               // default true
+    Map<String, String> env,        // extra env vars for subprocess
+    List<String> trustedDirs        // allowed command directories
+) {}
+```
+
+### Inline `${VAR}` Coercion
+
+When resolving an `ApiKeyCredential` or `TokenCredential`:
+- If inline value matches `^\$\{([A-Z][A-Z0-9_]*)\}$`, coerce to `SecretRef(ENV, "default", "$1")`
+- This allows `"key": "${OPENAI_API_KEY}"` in the JSON to resolve via env var
+
+---
+
+## Phase 5: Credential Resolution & Refresh (jaiclaw-identity)
+
+**Goal:** Transparent credential resolution — callers ask for "the credential for profile X" and get back a valid token.
 
 ### AuthProfileResolver
 
 ```java
 public class AuthProfileResolver {
-    // Returns { apiKey, provider, email } or throws
+    private final AuthProfileStoreManager storeManager;
+    private final SecretRefResolver secretRefResolver;
+    private final ProviderTokenRefresherRegistry refresherRegistry;
+
     public ResolvedCredential resolve(String profileId, Path agentDir);
 }
+
+public record ResolvedCredential(String apiKey, String provider, String email) {}
 ```
 
-Resolution logic:
-1. Load store for `agentDir`
-2. Look up `profiles[profileId]`
-3. Dispatch by credential type:
-   - `ApiKeyCredential` → return key (or resolve `keyRef`)
-   - `TokenCredential` → check expiry → return token (or resolve `tokenRef`)
-   - `OAuthCredential` → if `now < expires`, return `access`; else refresh
+### Resolution Logic
+
+```
+1. Load store via storeManager.loadForRuntime(agentDir)
+2. Look up profiles[profileId] → credential
+3. Switch on credential type:
+
+   ApiKeyCredential:
+     → If keyRef present: resolve via SecretRefResolver
+     → Else if key present: check for ${VAR} coercion → return
+     → Else: throw MISSING_CREDENTIAL
+
+   TokenCredential:
+     → Evaluate expiry state
+     → If EXPIRED or INVALID: throw
+     → If tokenRef present: resolve via SecretRefResolver
+     → Else: return token
+
+   OAuthCredential:
+     → If sub-agent: call storeManager.adoptFromMain() first
+     → If now < expires: return access token directly
+     → Else: call refreshWithLock()
+     → On refresh failure + sub-agent: fallback to main agent's credential
+```
 
 ### TokenRefresher SPI
 
 ```java
 public interface TokenRefresher {
+    // Which provider this refresher handles (e.g. "chutes", "qwen-portal")
     String providerId();
+
+    // Refresh the credential, returning updated tokens
     OAuthCredential refresh(OAuthCredential current) throws TokenRefreshException;
 }
 ```
 
-Built-in implementations:
-- `GenericOAuthTokenRefresher` — standard `grant_type=refresh_token` POST to token URL
-- Provider-specific refreshers registered via `ProviderTokenRefresherRegistry`
+### GenericOAuthTokenRefresher
+
+Standard `grant_type=refresh_token` implementation using `java.net.http.HttpClient`:
+
+```java
+public class GenericOAuthTokenRefresher implements TokenRefresher {
+    private final OAuthProviderConfig config;
+    private final HttpClient httpClient;
+
+    @Override
+    public OAuthCredential refresh(OAuthCredential current) throws TokenRefreshException {
+        // POST to config.tokenUrl() with:
+        //   grant_type=refresh_token
+        //   refresh_token=current.refresh()
+        //   client_id=current.clientId() or config.clientId()
+        //   client_secret=config.clientSecret() (if present)
+        // Parse response: { access_token, refresh_token?, expires_in }
+        // Per RFC 6749 §6: if new refresh_token returned, use it; else keep old
+        // Compute expires: now + max(0, expires_in) * 1000 - 5_minutes (floor at now + 30s)
+    }
+}
+```
 
 ### Refresh Under Lock
 
 ```java
 public OAuthCredential refreshWithLock(String profileId, Path agentDir) {
-    // 1. Acquire file lock
-    // 2. Re-read store (another process may have refreshed)
-    // 3. If still valid → return (no-op)
-    // 4. Call TokenRefresher.refresh()
-    // 5. Update store and save
-    // 6. Release lock
+    return AuthProfileFileLock.withLock(lockPath(agentDir), () -> {
+        // 1. Re-read store (another process may have refreshed)
+        AuthProfileStore fresh = storeManager.loadForAgent(agentDir);
+        OAuthCredential cred = (OAuthCredential) fresh.profiles().get(profileId);
+
+        // 2. Double-check: if still valid, return (no-op)
+        if (System.currentTimeMillis() < cred.expires()) return cred;
+
+        // 3. Find refresher for provider
+        TokenRefresher refresher = refresherRegistry.get(cred.provider());
+
+        // 4. Refresh
+        OAuthCredential updated = refresher.refresh(cred);
+
+        // 5. Update store and save
+        Map<String, AuthProfileCredential> profiles = new HashMap<>(fresh.profiles());
+        profiles.put(profileId, updated);
+        storeManager.save(agentDir, fresh.withProfiles(profiles));
+
+        return updated;
+    });
 }
 ```
 
 ### CredentialStateEvaluator
 
-Port of OpenClaw's `credential-state.ts` — pure static methods:
-
 ```java
-public static CredentialState resolveTokenExpiryState(Long expires);
-public static CredentialEligibility evaluateEligibility(AuthProfileCredential credential);
+public final class CredentialStateEvaluator {
+
+    public static CredentialState resolveTokenExpiryState(Long expires) {
+        if (expires == null) return CredentialState.MISSING;
+        if (!Double.isFinite(expires) || expires <= 0) return CredentialState.INVALID;
+        if (System.currentTimeMillis() >= expires) return CredentialState.EXPIRED;
+        return CredentialState.VALID;
+    }
+
+    public static CredentialEligibility evaluateEligibility(AuthProfileCredential credential) {
+        return switch (credential) {
+            case ApiKeyCredential c -> {
+                boolean hasKey = c.key() != null && !c.key().isBlank();
+                boolean hasRef = c.keyRef() != null;
+                yield hasKey || hasRef
+                    ? new CredentialEligibility(true, CredentialEligibility.OK)
+                    : new CredentialEligibility(false, CredentialEligibility.MISSING_CREDENTIAL);
+            }
+            case TokenCredential c -> {
+                boolean hasToken = (c.token() != null && !c.token().isBlank()) || c.tokenRef() != null;
+                if (!hasToken) yield new CredentialEligibility(false, CredentialEligibility.MISSING_CREDENTIAL);
+                CredentialState state = resolveTokenExpiryState(c.expires());
+                yield switch (state) {
+                    case EXPIRED -> new CredentialEligibility(false, CredentialEligibility.EXPIRED);
+                    case INVALID -> new CredentialEligibility(false, CredentialEligibility.INVALID_EXPIRES);
+                    default -> new CredentialEligibility(true, CredentialEligibility.OK);
+                };
+            }
+            case OAuthCredential c -> {
+                boolean hasAccess = c.access() != null && !c.access().isBlank();
+                boolean hasRefresh = c.refresh() != null && !c.refresh().isBlank();
+                yield hasAccess || hasRefresh
+                    ? new CredentialEligibility(true, CredentialEligibility.OK)
+                    : new CredentialEligibility(false, CredentialEligibility.MISSING_CREDENTIAL);
+            }
+        };
+    }
+}
 ```
 
 ---
 
-## Phase 4: OAuth Flows (jaiclaw-identity)
+## Phase 6: External CLI Sync (jaiclaw-identity)
+
+**Goal:** Sync credentials from Claude CLI, Codex CLI, Qwen CLI, and MiniMax CLI.
+
+### Supported CLIs
+
+| CLI | Profile ID | Source | Format |
+|-----|-----------|--------|--------|
+| Claude CLI | `anthropic:claude-cli` | macOS Keychain or `~/.claude/.credentials.json` | `{ claudeAiOauth: { accessToken, refreshToken, expiresAt } }` |
+| Codex CLI | `openai-codex:codex-cli` | macOS Keychain or `~/.codex/auth.json` | `{ tokens: { access_token, refresh_token, account_id }, last_refresh }` |
+| Qwen CLI | `qwen-portal:qwen-cli` | `~/.qwen/oauth_creds.json` | `{ access_token, refresh_token, expiry_date }` |
+| MiniMax CLI | `minimax-portal:minimax-cli` | `~/.minimax/oauth_creds.json` | `{ access_token, refresh_token, expiry_date }` |
+
+### KeychainReader (macOS only)
+
+```java
+public class KeychainReader {
+    // Reads a generic password from macOS Keychain
+    // Command: security find-generic-password -s "{service}" -a "{account}" -w
+    // Returns: Optional<String> (the password, typically JSON)
+    public Optional<String> readGenericPassword(String service, String account);
+}
+```
+
+| CLI | Keychain Service | Keychain Account |
+|-----|-----------------|------------------|
+| Claude CLI | `Claude Code-credentials` | `Claude Code` |
+| Codex CLI | `Codex Auth` | `cli\|` + SHA-256(`$CODEX_HOME`).hex[0..15] |
+
+### CachedCredentialReader
+
+Wraps each CLI reader with a 15-minute in-process TTL cache:
+
+```java
+public class CachedCredentialReader<T> {
+    private static final long TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+    private final Supplier<Optional<T>> reader;
+    private volatile T cached;
+    private volatile long readAt;
+
+    public Optional<T> read();
+    public void invalidate();
+}
+```
+
+### ExternalCliSyncManager
+
+```java
+public class ExternalCliSyncManager {
+    private static final long NEAR_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+    // Sync all external CLIs into the store. Returns true if any profile mutated.
+    public boolean syncAll(AuthProfileStore store);
+}
+```
+
+**Sync logic per provider:**
+1. Skip if existing profile is fresh: `expires > now + NEAR_EXPIRY_MS`
+2. Read from cached reader
+3. Update store if: no existing cred, OR existing is expired, OR new has later expiry
+4. Return true if mutated
+
+### Credential Type Produced
+
+All CLI readers produce `OAuthCredential` or `TokenCredential`:
+- Claude CLI with refresh token → `OAuthCredential`
+- Claude CLI without refresh token → `TokenCredential`
+- Codex CLI → `OAuthCredential` (expiry computed as `lastRefresh + 1 hour`)
+- Qwen CLI → `OAuthCredential`
+- MiniMax CLI → `OAuthCredential`
+
+---
+
+## Phase 7: OAuth Flows (jaiclaw-identity)
 
 **Goal:** Interactive OAuth flows for acquiring initial credentials.
 
@@ -286,57 +725,122 @@ public static CredentialEligibility evaluateEligibility(AuthProfileCredential cr
 5. Exchange code for tokens (POST to token URL)
 6. Fetch userinfo (optional, provider-specific)
 7. Store credentials in auth-profiles.json
+8. Sync to sibling agents
 ```
 
 ### PkceGenerator
 
 ```java
-public record PkceChallenge(String verifier, String challenge) {}
+public final class PkceGenerator {
+    public record PkceChallenge(String verifier, String challenge) {}
 
-public static PkceChallenge generate() {
-    byte[] random = new byte[32];
-    new SecureRandom().nextBytes(random);
-    String verifier = HexFormat.of().formatHex(random);
-    byte[] sha256 = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(UTF_8));
-    String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(sha256);
-    return new PkceChallenge(verifier, challenge);
+    public static PkceChallenge generate() {
+        byte[] random = new byte[32];
+        new SecureRandom().nextBytes(random);
+        String verifier = HexFormat.of().formatHex(random);
+        byte[] sha256 = MessageDigest.getInstance("SHA-256")
+            .digest(verifier.getBytes(StandardCharsets.UTF_8));
+        String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(sha256);
+        return new PkceChallenge(verifier, challenge);
+    }
 }
 ```
 
 ### OAuthCallbackServer
 
 Lightweight loopback HTTP server using `com.sun.net.httpserver.HttpServer`:
-- Binds to `127.0.0.1:{port}` (provider-specific port)
-- Handles single GET request to callback path
-- Extracts `code` and `state` query parameters
-- Validates `state` matches expected value (CSRF protection)
-- Returns HTML success page, then signals completion via `CompletableFuture`
-- Shuts down after receiving the callback (or on timeout)
+
+```java
+public class OAuthCallbackServer implements AutoCloseable {
+    private final CompletableFuture<OAuthCallbackResult> resultFuture;
+
+    // Start server, bind to 127.0.0.1:{port}, listen on {path}
+    public OAuthCallbackServer(int port, String path, String expectedState, Duration timeout);
+
+    // Block until callback received or timeout
+    public OAuthCallbackResult awaitCallback() throws TimeoutException;
+
+    @Override
+    public void close(); // stops the server
+}
+
+public record OAuthCallbackResult(String code, String state) {}
+```
+
+- Validates `state` matches expected (CSRF protection)
+- Returns HTML success page to browser
+- Signals `CompletableFuture` completion
+- Auto-shuts down after callback or timeout
 
 ### DeviceCodeFlow
 
+```java
+public class DeviceCodeFlow {
+    public record DeviceCodeResponse(
+        String deviceCode, String userCode,
+        String verificationUri, int interval, int expiresIn
+    ) {}
+
+    // Step 1: Request device code
+    public DeviceCodeResponse requestDeviceCode(OAuthProviderConfig config);
+
+    // Step 2: Poll for token (blocks until authorized or timeout)
+    public OAuthFlowResult pollForToken(OAuthProviderConfig config, DeviceCodeResponse deviceCode);
+}
 ```
-1. POST device/code request → receive { device_code, user_code, verification_uri, interval }
-2. Display user_code + verification_uri to user
-3. Poll token endpoint every {interval} seconds
-4. Handle: authorization_pending (continue), slow_down (increase interval), access_denied (abort)
-5. On success: return tokens
-```
+
+Polling handles:
+- `authorization_pending` → continue polling
+- `slow_down` → increase interval by 5 seconds
+- `access_denied` → throw
+- `expired_token` → throw
+- Success → return tokens
 
 ### RemoteEnvironmentDetector
 
 ```java
-public static boolean isRemote() {
-    // SSH session
-    if (System.getenv("SSH_CLIENT") != null) return true;
-    if (System.getenv("SSH_TTY") != null) return true;
-    if (System.getenv("SSH_CONNECTION") != null) return true;
-    // Dev containers
-    if (System.getenv("REMOTE_CONTAINERS") != null) return true;
-    if (System.getenv("CODESPACES") != null) return true;
-    // Headless Linux (not WSL)
-    if (isHeadlessLinux()) return true;
-    return false;
+public final class RemoteEnvironmentDetector {
+    public static boolean isRemote() {
+        if (System.getenv("SSH_CLIENT") != null) return true;
+        if (System.getenv("SSH_TTY") != null) return true;
+        if (System.getenv("SSH_CONNECTION") != null) return true;
+        if (System.getenv("REMOTE_CONTAINERS") != null) return true;
+        if (System.getenv("CODESPACES") != null) return true;
+        if (isHeadlessLinux()) return true;
+        return false;
+    }
+
+    private static boolean isHeadlessLinux() {
+        if (!"Linux".equalsIgnoreCase(System.getProperty("os.name"))) return false;
+        if (isWsl()) return false;
+        return System.getenv("DISPLAY") == null && System.getenv("WAYLAND_DISPLAY") == null;
+    }
+
+    private static boolean isWsl() {
+        // Check /proc/version for "microsoft" or "WSL"
+    }
+}
+```
+
+### BrowserLauncher
+
+```java
+public final class BrowserLauncher {
+    public static boolean open(String url) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        try {
+            if (os.contains("mac")) {
+                new ProcessBuilder("open", url).start();
+            } else if (os.contains("linux")) {
+                new ProcessBuilder("xdg-open", url).start();
+            } else {
+                Desktop.getDesktop().browse(URI.create(url));
+            }
+            return true;
+        } catch (Exception e) {
+            return false;  // caller should fall back to URL paste
+        }
+    }
 }
 ```
 
@@ -345,86 +849,124 @@ public static boolean isRemote() {
 ```java
 public record OAuthProviderConfig(
     String providerId,
-    String authorizeUrl,
-    String tokenUrl,
-    String userinfoUrl,        // nullable
+    String authorizeUrl,          // for auth code flow
+    String tokenUrl,              // token endpoint
+    String userinfoUrl,           // optional userinfo endpoint
+    String deviceCodeUrl,         // for device code flow
     String clientId,
-    String clientSecret,       // nullable
-    String redirectUri,
-    int callbackPort,
-    String callbackPath,
+    String clientSecret,          // nullable
+    String redirectUri,           // default: http://127.0.0.1:{port}{path}
+    int callbackPort,             // loopback port for redirect
+    String callbackPath,          // path on loopback server
     List<String> scopes,
-    OAuthFlowType flowType     // AUTHORIZATION_CODE or DEVICE_CODE
+    OAuthFlowType flowType        // AUTHORIZATION_CODE or DEVICE_CODE
+) {}
+
+public enum OAuthFlowType { AUTHORIZATION_CODE, DEVICE_CODE }
+```
+
+### Built-in Provider Configs
+
+| Provider | Flow | Port | Scopes |
+|----------|------|------|--------|
+| Chutes | Auth Code + PKCE | 1456 | `openid profile chutes:invoke` |
+| OpenAI Codex | Auth Code + PKCE | 1455 | (via pi-ai library equiv) |
+| Google Gemini | Auth Code + PKCE | 8085 | `cloud-platform userinfo.email userinfo.profile` |
+| Qwen Portal | Device Code | — | `openid profile email model.completion` |
+| MiniMax Portal | Device Code | — | `group_id profile model.completion` |
+
+### OAuthFlowResult
+
+```java
+public record OAuthFlowResult(
+    String accessToken,
+    String refreshToken,
+    long expiresAt,           // ms-since-epoch
+    String email,             // from userinfo (nullable)
+    String accountId,         // provider-specific (nullable)
+    String projectId,         // Google Cloud project (nullable)
+    String clientId           // stored for refresh
 ) {}
 ```
 
-Provider configs are registered as beans or loaded from YAML:
+### Expiry Computation
 
-```yaml
-jaiclaw:
-  oauth:
-    providers:
-      chutes:
-        authorize-url: https://api.chutes.ai/idp/authorize
-        token-url: https://api.chutes.ai/idp/token
-        userinfo-url: https://api.chutes.ai/idp/userinfo
-        callback-port: 1456
-        callback-path: /oauth-callback
-        scopes: [openid, profile, "chutes:invoke"]
-        flow-type: AUTHORIZATION_CODE
-      qwen-portal:
-        token-url: https://chat.qwen.ai/api/v1/oauth2/token
-        device-code-url: https://chat.qwen.ai/api/v1/oauth2/device/code
-        client-id: f0304373b74a44d2b584a3fb70ca9e56
-        scopes: [openid, profile, email, "model.completion"]
-        flow-type: DEVICE_CODE
-```
-
----
-
-## Phase 5: Session Profile Rotation (jaiclaw-identity)
-
-**Goal:** Round-robin credential rotation per session with cooldown awareness.
-
-### SessionAuthProfileOverride
-
-Extends the existing `Session` record (or uses a companion map in `SessionManager`):
+Port of OpenClaw's `coerceExpiresAt`:
 
 ```java
-public class SessionAuthProfileResolver {
-    // Pick the right profile for a new or existing session
-    public Optional<String> resolve(
-        String provider, Path agentDir,
-        String currentOverride, String overrideSource,
-        boolean isNewSession
-    );
-
-    // Clear manual override
-    public void clearOverride(String sessionKey);
+public static long computeExpiresAt(int expiresInSeconds) {
+    long now = System.currentTimeMillis();
+    long fiveMinutes = 5 * 60 * 1000;
+    long thirtySeconds = 30 * 1000;
+    long value = now + Math.max(0, expiresInSeconds) * 1000L - fiveMinutes;
+    return Math.max(value, now + thirtySeconds);
 }
 ```
 
-Logic mirrors OpenClaw's `session-override.ts`:
-- New session → advance to next profile in order
-- User-pinned profiles (`source = "user"`) are sticky
-- Profiles in cooldown are skipped
-- Wraps around to first profile after reaching end of order list
+---
 
-### Session Record Extension
+## Phase 8: Session Profile Rotation (jaiclaw-identity)
 
-Add optional fields to `Session` or use a separate `SessionAuthState` record:
+**Goal:** Round-robin credential rotation per session with cooldown awareness.
+
+### SessionAuthState
 
 ```java
 public record SessionAuthState(
-    String authProfileOverride,
-    String overrideSource,        // "user" | "auto"
-    Integer compactionCount
-) {}
+    String authProfileOverride,       // active profileId override
+    String overrideSource,            // "user" or "auto"
+    Integer compactionCount           // compaction cycle when set
+) {
+    public static final String SOURCE_USER = "user";
+    public static final String SOURCE_AUTO = "auto";
+}
+```
+
+### SessionAuthProfileResolver
+
+```java
+public class SessionAuthProfileResolver {
+    private final AuthProfileStoreManager storeManager;
+
+    // Resolve the auth profile for a session
+    public Optional<String> resolve(
+        String provider,
+        Path agentDir,
+        SessionAuthState currentState,
+        boolean isNewSession,
+        Integer currentCompactionCount
+    );
+
+    // Clear manual override
+    public SessionAuthState clearOverride();
+}
+```
+
+### Round-Robin Logic
+
+```
+1. Validate current override:
+   - Clear if profile no longer exists in store
+   - Clear if profile is for wrong provider
+   - Clear if profile not in configured order list
+
+2. If no order configured → return empty (no rotation)
+
+3. pickFirstAvailable(): first profile in order not in cooldown (fallback: order[0])
+
+4. pickNextAvailable(active): next profile after active not in cooldown (round-robin wraparound)
+
+5. Rotation triggers:
+   - isNewSession → advance to next
+   - compactionCount advanced since last stored → rotate
+   - current profile in cooldown → pick first available
+
+6. User-set overrides (source = "user") are sticky — not auto-rotated
 ```
 
 ---
 
-## Phase 6: Shell Integration (jaiclaw-shell)
+## Phase 9: Shell Integration (jaiclaw-shell)
 
 **Goal:** CLI commands for managing credentials and running OAuth flows.
 
@@ -440,27 +982,50 @@ auth pin <profileId>      — Pin profile for current session
 auth unpin                — Clear session profile override
 ```
 
-### Login Flow (Shell)
+### LoginCommand
 
+```java
+@ShellComponent
+public class LoginCommand {
+    @ShellMethod(key = {"login"}, value = "Authenticate with an OAuth provider")
+    public void login(
+        @ShellOption(defaultValue = "") String provider,
+        @ShellOption(value = "--list", defaultValue = "false") boolean listProviders
+    );
+}
 ```
-1. User runs: login chutes
-2. Shell resolves OAuthProviderConfig for "chutes"
-3. Detect environment (local vs remote)
-4. If local: open browser, start callback server, wait for code
-5. If remote: print URL, prompt for redirect URL paste
-6. Exchange code for tokens
-7. Fetch userinfo
-8. Store in auth-profiles.json via AuthProfileStoreManager
-9. Print success: "Logged in as user@example.com (chutes)"
+
+### AuthCommand
+
+```java
+@ShellComponent
+public class AuthCommand {
+    @ShellMethod(key = {"auth status", "auth-status"}, value = "Show auth profile status")
+    public void status();
+
+    @ShellMethod(key = {"auth rotate", "auth-rotate"}, value = "Rotate to next profile")
+    public void rotate(@ShellOption String provider);
+
+    @ShellMethod(key = {"auth pin", "auth-pin"}, value = "Pin a profile for this session")
+    public void pin(@ShellOption String profileId);
+
+    @ShellMethod(key = {"auth unpin", "auth-unpin"}, value = "Clear session profile override")
+    public void unpin();
+
+    @ShellMethod(key = {"logout"}, value = "Remove stored credentials")
+    public void logout(@ShellOption String profileId);
+}
 ```
 
-### SecurityStep Enhancement (Onboard Wizard)
+### SecurityStep Enhancement
 
-Extend the existing onboard wizard `SecurityStep` to offer OAuth login alongside API key and JWT options when applicable.
+Extend the existing onboard wizard `SecurityStep` to offer OAuth login as an option when applicable:
+- Quick mode: skip (unchanged)
+- Manual mode: add "OAuth (login with browser)" to security mode selection
 
 ---
 
-## Phase 7: Auto-Configuration (jaiclaw-spring-boot-starter)
+## Phase 10: Auto-Configuration (jaiclaw-spring-boot-starter)
 
 ### New Auto-Config Class
 
@@ -472,17 +1037,26 @@ public class JaiClawIdentityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AuthProfileStoreManager authProfileStoreManager() { ... }
+    public AuthProfileStoreManager authProfileStoreManager(OAuthProperties oauthProperties) { ... }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SecretRefResolver secretRefResolver() { ... }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ExternalCliSyncManager externalCliSyncManager() { ... }
 
     @Bean
     @ConditionalOnMissingBean
     public ProviderTokenRefresherRegistry tokenRefresherRegistry(
-        List<TokenRefresher> refreshers) { ... }
+        ObjectProvider<List<TokenRefresher>> refreshers) { ... }
 
     @Bean
     @ConditionalOnMissingBean
     public AuthProfileResolver authProfileResolver(
         AuthProfileStoreManager storeManager,
+        SecretRefResolver secretRefResolver,
         ProviderTokenRefresherRegistry refresherRegistry) { ... }
 
     @Bean
@@ -490,10 +1064,10 @@ public class JaiClawIdentityAutoConfiguration {
     public SessionAuthProfileResolver sessionAuthProfileResolver(
         AuthProfileStoreManager storeManager) { ... }
 
-    // Identity linking beans (currently not auto-configured)
+    // Existing identity linking beans (currently not auto-configured)
     @Bean
     @ConditionalOnMissingBean
-    public IdentityLinkStore identityLinkStore(TenantGuard tenantGuard) { ... }
+    public IdentityLinkStore identityLinkStore(ObjectProvider<TenantGuard> tenantGuard) { ... }
 
     @Bean
     @ConditionalOnMissingBean
@@ -505,43 +1079,49 @@ public class JaiClawIdentityAutoConfiguration {
 }
 ```
 
-### Configuration Properties
+### OAuthProperties
 
 ```java
 @ConfigurationProperties(prefix = "jaiclaw.oauth")
 public record OAuthProperties(
-    boolean enabled,                              // default false
-    String stateDir,                              // default ~/.jaiclaw
-    Map<String, OAuthProviderConfig> providers,   // provider configs
-    boolean readOnly                              // default false
+    boolean enabled,                                  // default false
+    String stateDir,                                  // default ~/.jaiclaw
+    String agentId,                                   // default "default"
+    Map<String, OAuthProviderConfig> providers,       // provider configs
+    boolean readOnly,                                 // default false
+    boolean cliSyncEnabled,                           // default true
+    Map<String, SecretProviderConfig> secretProviders // named secret providers
 ) {}
+```
+
+### Registration
+
+Add `io.jaiclaw.starter.JaiClawIdentityAutoConfiguration` to:
+```
+META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
 ```
 
 ---
 
-## Phase 8: Dependencies & Build
+## Dependencies & Build
 
-### New Dependencies for jaiclaw-identity
+### New Dependencies for jaiclaw-identity pom.xml
 
 ```xml
 <!-- Already present -->
 <dependency><groupId>io.jaiclaw</groupId><artifactId>jaiclaw-core</artifactId></dependency>
 <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
-
-<!-- New — for HTTP token exchange and callback server -->
-<!-- No new external deps needed: java.net.http.HttpClient (Java 11+) for token exchange -->
-<!-- com.sun.net.httpserver.HttpServer (JDK built-in) for callback server -->
-<!-- java.security.MessageDigest for PKCE SHA-256 -->
-<!-- java.nio.channels.FileLock for file locking -->
+<dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId></dependency>
 ```
 
 **Zero new external dependencies.** All required functionality is available in the JDK:
-- `java.net.http.HttpClient` — token exchange HTTP requests
+- `java.net.http.HttpClient` — token exchange and userinfo HTTP requests
 - `com.sun.net.httpserver.HttpServer` — loopback callback server
 - `java.security.MessageDigest` + `java.util.Base64` — PKCE S256
 - `java.security.SecureRandom` — PKCE verifier generation
-- `java.nio.channels.FileLock` — file locking
-- `java.awt.Desktop` — open browser (with headless fallback)
+- `java.nio.channels.FileLock` + `java.nio.channels.FileChannel` — file locking
+- `java.lang.ProcessBuilder` — browser launch, keychain read, exec secret provider
+- `java.util.HexFormat` — hex encoding (Java 17+)
 
 ---
 
@@ -549,20 +1129,21 @@ public record OAuthProperties(
 
 | Step | Phase | Scope | Est. Files |
 |------|-------|-------|-----------|
-| 1 | Core Types | `jaiclaw-core`: sealed credential types, store record, enums | 8-10 |
-| 2 | Serialization | `jaiclaw-identity`: Jackson serializer for sealed types | 2 |
-| 3 | Store Manager | `jaiclaw-identity`: file I/O, locking, merge, upsert | 3-4 |
-| 4 | Credential Eval | `jaiclaw-identity`: expiry check, eligibility evaluation | 1-2 |
-| 5 | Token Refresh | `jaiclaw-identity`: SPI + generic refresher + resolver | 4-5 |
-| 6 | PKCE + Device | `jaiclaw-identity`: OAuth flow implementations | 6-8 |
-| 7 | Remote Detection | `jaiclaw-identity`: environment detection | 1 |
-| 8 | Provider Configs | `jaiclaw-identity`: Chutes, Qwen, MiniMax, etc. | 5 |
-| 9 | Session Rotation | `jaiclaw-identity`: round-robin override resolver | 2-3 |
-| 10 | Auto-Config | `jaiclaw-spring-boot-starter`: wire identity beans | 1-2 |
-| 11 | Shell Commands | `jaiclaw-shell`: login/logout/auth commands | 2-3 |
-| 12 | Tests | Spock specs for each phase | 8-12 |
+| 1 | Core Types | `jaiclaw-core`: sealed credential types, store record, SecretRef, enums | 11 |
+| 2 | Serialization | `jaiclaw-identity`: Jackson ser/deser with OpenClaw aliases | 2 |
+| 3 | Store Manager | `jaiclaw-identity`: file I/O, locking, merge, multi-agent | 4 |
+| 4 | SecretRef | `jaiclaw-identity`: env/file/exec backends, resolver, cache | 6 |
+| 5 | Credential Eval | `jaiclaw-identity`: expiry check, eligibility evaluation | 1 |
+| 6 | Token Refresh | `jaiclaw-identity`: SPI + generic refresher + resolver | 5 |
+| 7 | CLI Sync | `jaiclaw-identity`: Claude/Codex/Qwen/MiniMax readers + sync manager | 7 |
+| 8 | OAuth Flows | `jaiclaw-identity`: PKCE + device code + callback server + browser | 8 |
+| 9 | Provider Configs | `jaiclaw-identity`: Chutes, OpenAI, Google, Qwen, MiniMax | 5 |
+| 10 | Session Rotation | `jaiclaw-identity`: round-robin override resolver + state record | 2 |
+| 11 | Auto-Config | `jaiclaw-spring-boot-starter`: wire identity beans + properties | 2 |
+| 12 | Shell Commands | `jaiclaw-shell`: login/logout/auth commands | 2 |
+| 13 | Tests | Spock specs for phases 1-12 | 12-15 |
 
-**Total: ~45-60 new files across 3 modules.**
+**Total: ~65-70 new files across 3 modules.**
 
 ---
 
@@ -572,25 +1153,81 @@ Each phase gets Spock specs:
 
 | Phase | Test Focus |
 |-------|-----------|
-| Core Types | Sealed interface permits, record equality, JSON round-trip |
-| Store Manager | Load/save/merge, file locking contention, legacy migration |
-| Credential Eval | Expiry state transitions, eligibility edge cases |
-| Token Refresh | Mock HTTP for refresh_token grant, lock contention, double-check |
-| OAuth Flows | PKCE generation correctness, callback server lifecycle, state validation |
-| Remote Detection | Env var combinations, headless Linux detection |
-| Session Rotation | Round-robin ordering, cooldown skip, user-pinned sticky |
+| Core Types | Sealed interface permits, record equality, JSON round-trip, SecretRef construction |
+| Serialization | OpenClaw alias handling (mode↔type, apiKey↔key), `${VAR}` coercion, round-trip |
+| Store Manager | Load/save/merge, file locking contention, legacy migration, multi-agent inheritance |
+| SecretRef | Env resolution, file read (JSON pointer + single value), exec command, permission checks |
+| Credential Eval | Expiry state transitions, eligibility for each credential type, edge cases |
+| Token Refresh | Mock HTTP for refresh_token grant, lock contention, double-check-under-lock |
+| CLI Sync | Mock file reads per CLI, keychain mock, cache TTL, near-expiry skip logic |
+| OAuth Flows | PKCE correctness, callback server lifecycle, state validation, device code polling |
+| Remote Detection | Env var combinations, headless Linux detection, WSL exclusion |
+| Session Rotation | Round-robin ordering, cooldown skip, user-pinned sticky, compaction rotation |
 | Auto-Config | Bean presence/absence based on classpath and properties |
+| Shell Commands | Login flow mock, auth status output, pin/unpin state |
+
+### Integration Tests (18 tests)
+
+In addition to unit tests, the module has 18 integration tests that exercise full OAuth flows end-to-end against a local mock HTTP server (`MockOAuthServer`). These run under the `integration-test` Maven profile via `maven-failsafe-plugin`.
+
+| Spec | Tests | Flow |
+|------|-------|------|
+| `AuthorizationCodeFlowIT` | 6 | Auth code + PKCE + userinfo + credential storage |
+| `DeviceCodeFlowIT` | 7 | Device code request + polling (pending/slow_down/success/denied) |
+| `OAuthCallbackServerIT` | 5 | Loopback callback + CSRF + error + timeout + e2e token exchange |
+
+**Key patterns:**
+- `MockOAuthServer` wraps `com.sun.net.httpserver.HttpServer` on random port with configurable JSON responses and request history tracking
+- Real `java.net.http.HttpClient` makes actual HTTP calls (not mocked interfaces)
+- `pendingThenSuccess(path, pendingCount, successJson)` simulates device code polling
+- `OAuthFlowManager` has a testable constructor accepting injected `AuthorizationCodeFlow` / `DeviceCodeFlow`
+
+**Running:**
+```bash
+./mvnw verify -pl :jaiclaw-identity -Pintegration-test -o  # 90 unit + 18 IT
+```
+
+See [OAuth Integration Tests Architecture](OAUTH-INTEGRATION-TESTS.md) for full details.
 
 ---
 
-## Open Questions
+## Constants
 
-1. **Cross-compatibility with OpenClaw?** Should `auth-profiles.json` be read/write compatible with OpenClaw's format? If so, the Jackson serializer needs alias support (`mode` ↔ `type`, `apiKey` ↔ `key`).
+```java
+public final class AuthProfileConstants {
+    public static final int AUTH_STORE_VERSION = 1;
+    public static final String AUTH_PROFILE_FILENAME = "auth-profiles.json";
+    public static final String LEGACY_AUTH_FILENAME = "auth.json";
 
-2. **SecretRef abstraction?** OpenClaw supports `keyRef` for indirect secret storage (env var, keychain). Do we need this in v1, or is inline-only sufficient?
+    // External CLI profile IDs
+    public static final String CLAUDE_CLI_PROFILE_ID = "anthropic:claude-cli";
+    public static final String CODEX_CLI_PROFILE_ID = "openai-codex:codex-cli";
+    public static final String QWEN_CLI_PROFILE_ID = "qwen-portal:qwen-cli";
+    public static final String MINIMAX_CLI_PROFILE_ID = "minimax-portal:minimax-cli";
 
-3. **External CLI sync?** Should JaiClaw sync credentials from Claude CLI / Codex CLI like OpenClaw does? This adds complexity but improves UX for users who already have those CLIs.
+    // Sync timing
+    public static final long EXTERNAL_CLI_SYNC_TTL_MS = 15 * 60 * 1000;     // 15 min
+    public static final long EXTERNAL_CLI_NEAR_EXPIRY_MS = 10 * 60 * 1000;  // 10 min
 
-4. **Browser opening strategy?** `java.awt.Desktop.browse()` is flaky on some Linux distros. Consider `xdg-open` / `open` (macOS) as fallback, or always default to URL paste.
+    // External CLI file paths (relative to user home)
+    public static final String CLAUDE_CLI_CREDS_PATH = ".claude/.credentials.json";
+    public static final String CODEX_CLI_AUTH_FILENAME = "auth.json";
+    public static final String QWEN_CLI_CREDS_PATH = ".qwen/oauth_creds.json";
+    public static final String MINIMAX_CLI_CREDS_PATH = ".minimax/oauth_creds.json";
 
-5. **Multi-agent inheritance?** OpenClaw supports sub-agents inheriting credentials from a main agent. Is this needed for JaiClaw's architecture, or is single-agent-per-deployment sufficient?
+    // macOS Keychain entries
+    public static final String CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
+    public static final String CLAUDE_KEYCHAIN_ACCOUNT = "Claude Code";
+    public static final String CODEX_KEYCHAIN_SERVICE = "Codex Auth";
+
+    // File lock settings
+    public static final int LOCK_MAX_RETRIES = 10;
+    public static final long LOCK_BASE_DELAY_MS = 100;
+    public static final long LOCK_MAX_DELAY_MS = 10_000;
+    public static final long LOCK_STALE_TIMEOUT_MS = 30_000;
+
+    // Default state directory
+    public static final String DEFAULT_STATE_DIR = ".jaiclaw";
+    public static final String AGENTS_DIR = "agents";
+}
+```

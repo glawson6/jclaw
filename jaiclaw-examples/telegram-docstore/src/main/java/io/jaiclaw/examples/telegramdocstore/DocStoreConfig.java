@@ -6,7 +6,6 @@ import io.jaiclaw.docstore.analysis.DocStoreAnalyzer;
 import io.jaiclaw.docstore.repository.DocStoreRepository;
 import io.jaiclaw.docstore.repository.JsonFileDocStoreRepository;
 import io.jaiclaw.docstore.search.DocStoreSearchProvider;
-import io.jaiclaw.docstore.search.FullTextDocStoreSearch;
 import io.jaiclaw.docstore.telegram.TelegramDocStorePlugin;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,10 +21,8 @@ public class DocStoreConfig {
                 Path.of(System.getProperty("user.home"), ".jaiclaw", "docstore"));
     }
 
-    @Bean
-    DocStoreSearchProvider docStoreSearchProvider() {
-        return new FullTextDocStoreSearch();
-    }
+    // DocStoreSearchProvider is now auto-configured by DocStoreAutoConfiguration
+    // with TenantGuard injection. No manual bean needed.
 
     @Bean
     DocStoreAnalyzer docStoreAnalyzer() {

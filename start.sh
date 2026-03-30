@@ -65,23 +65,6 @@ load_env() {
     fi
 }
 
-# ─── Sync API key to .env ────────────────────────────────────────────────────
-#
-# After resolve_api_key generates or reads a key, write it to the .env file so
-# Docker Compose can pass it to the container. Without this, the container
-# generates its own key (different from the host's) and the curl example fails.
-#
-sync_api_key_to_env() {
-    if [ -n "${RESOLVED_API_KEY:-}" ] && [ -f "$ENV_FILE" ]; then
-        local current
-        current=$(grep "^JAICLAW_API_KEY=" "$ENV_FILE" | cut -d= -f2)
-        if [ "$current" != "$RESOLVED_API_KEY" ]; then
-            sed -i.bak "s|^JAICLAW_API_KEY=.*|JAICLAW_API_KEY=${RESOLVED_API_KEY}|" "$ENV_FILE"
-            rm -f "$ENV_FILE.bak"
-        fi
-    fi
-}
-
 # ─── Java check ──────────────────────────────────────────────────────────────
 
 ensure_java() {
@@ -166,7 +149,7 @@ cmd_gateway() {
     header "JaiClaw Gateway (Docker)"
     load_env
     resolve_api_key
-    sync_api_key_to_env
+    sync_api_key_to_all_envs "$COMPOSE_DIR"
     ensure_docker
     ensure_image jaiclaw-gateway-app
 

@@ -36,6 +36,13 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
+        <!-- Auto-configuration -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Optional: Spring AI for vector/hybrid search -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

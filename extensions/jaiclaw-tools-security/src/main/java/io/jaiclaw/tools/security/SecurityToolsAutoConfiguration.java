@@ -1,5 +1,6 @@
 package io.jaiclaw.tools.security;
 
+import io.jaiclaw.core.tenant.TenantGuard;
 import io.jaiclaw.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,8 +59,8 @@ public class SecurityToolsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public HandshakeSessionStore handshakeSessionStore() {
-        return new HandshakeSessionStore();
+    public HandshakeSessionStore handshakeSessionStore(TenantGuard tenantGuard) {
+        return new HandshakeSessionStore(tenantGuard);
     }
 
     @Bean

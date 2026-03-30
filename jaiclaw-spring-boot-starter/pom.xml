@@ -112,6 +112,11 @@
             <artifactId>jaiclaw-rest-cli-architect</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-identity</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

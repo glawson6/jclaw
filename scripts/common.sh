@@ -91,6 +91,34 @@ print_api_httpie_example() {
 #
 # Prints the active security mode and key (if applicable).
 #
+# ─── API Key Sync ────────────────────────────────────────────────────────────
+#
+# Syncs the resolved API key to a specific env file.
+# Usage: sync_api_key_to_env <target_file>
+#
+sync_api_key_to_env() {
+    local target_file="${1:-}"
+    [ -z "$target_file" ] || [ -z "${RESOLVED_API_KEY:-}" ] && return
+    [ ! -f "$target_file" ] && return
+    local current
+    current=$(grep "^JAICLAW_API_KEY=" "$target_file" 2>/dev/null | cut -d= -f2)
+    if [ "$current" != "$RESOLVED_API_KEY" ]; then
+        sed -i.bak "s|^JAICLAW_API_KEY=.*|JAICLAW_API_KEY=${RESOLVED_API_KEY}|" "$target_file"
+        rm -f "$target_file.bak"
+    fi
+}
+
+# Syncs the resolved API key to all known env files in a compose directory.
+# Usage: sync_api_key_to_all_envs [compose_dir]
+#
+sync_api_key_to_all_envs() {
+    local compose_dir="${1:-.}"
+    sync_api_key_to_env "$compose_dir/.env"
+    sync_api_key_to_env "$compose_dir/.env.multitenant"
+}
+
+# ─── Security Info ────────────────────────────────────────────────────────────
+#
 print_security_info() {
     local mode="${JAICLAW_SECURITY_MODE:-api-key}"
     case "$mode" in

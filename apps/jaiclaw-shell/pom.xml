@@ -22,6 +22,12 @@
             <type>pom</type>
         </dependency>
 
+        <!-- Identity / OAuth support -->
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-identity</artifactId>
+        </dependency>
+
         <!-- All three AI providers -->
         <dependency>
             <groupId>io.jaiclaw</groupId>

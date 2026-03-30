@@ -54,6 +54,28 @@ Links persist to a JSON file (e.g., `data/identity-links.json`):
 
 The store uses a `ConcurrentHashMap` keyed by `channel:channelUserId` for O(1) lookups.
 
+## OAuth Credential Management
+
+Beyond identity linking, this module manages upstream provider credentials via OAuth:
+
+- **PKCE Authorization Code Flow** — Browser-based login for Chutes, OpenAI Codex, Google Gemini
+- **Device Code Flow (RFC 8628)** — Headless login for Qwen, MiniMax
+- **Token Refresh** — Transparent refresh with provider-specific refreshers
+- **Session Rotation** — Round-robin with cooldown across credentials
+- **CLI Sync** — Reads credentials from Claude CLI, Codex CLI, Qwen CLI, MiniMax CLI
+- **Multi-Agent Inheritance** — Sub-agents inherit credentials from the main agent
+
+### Key OAuth Classes
+
+| Class | Purpose |
+|-------|---------|
+| `OAuthFlowManager` | Orchestrates login flows, stores credentials |
+| `AuthorizationCodeFlow` | PKCE auth code: URL construction, code exchange, userinfo |
+| `DeviceCodeFlow` | Device code request + polling (RFC 8628) |
+| `OAuthCallbackServer` | Loopback HTTP server for redirect callbacks |
+| `AuthProfileStoreManager` | File-based credential store with locking and merge |
+| `OAuthProviderConfig` | Provider endpoints, client credentials, scopes |
+
 ## Integration
 
 When a message arrives on any channel, use `IdentityResolver.resolve(channel, userId)` to get the canonical ID. This canonical ID can then be used for:
@@ -62,3 +84,15 @@ When a message arrives on any channel, use `IdentityResolver.resolve(channel, us
 - Unified user preferences
 - Consistent audit trails
 - Per-user rate limiting across all channels
+
+## Testing
+
+- **90 unit tests** (Spock specs) covering all classes in isolation
+- **18 integration tests** running under the `integration-test` Maven profile, exercising full OAuth flows end-to-end against a local mock HTTP server
+
+```bash
+./mvnw test -pl :jaiclaw-identity -o                         # unit tests
+./mvnw verify -pl :jaiclaw-identity -Pintegration-test -o    # unit + integration
+```
+
+See [OAuth Integration Tests Architecture](../OAUTH-INTEGRATION-TESTS.md) for details on the mock server pattern and test coverage.

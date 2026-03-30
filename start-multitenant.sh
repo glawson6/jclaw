@@ -69,19 +69,6 @@ load_env() {
     ok "Loaded configuration from $ENV_FILE"
 }
 
-# ─── Sync API key to .env ────────────────────────────────────────────────────
-
-sync_api_key_to_env() {
-    if [ -n "${RESOLVED_API_KEY:-}" ] && [ -f "$ENV_FILE" ]; then
-        local current
-        current=$(grep "^JAICLAW_API_KEY=" "$ENV_FILE" | cut -d= -f2)
-        if [ "$current" != "$RESOLVED_API_KEY" ]; then
-            sed -i.bak "s|^JAICLAW_API_KEY=.*|JAICLAW_API_KEY=${RESOLVED_API_KEY}|" "$ENV_FILE"
-            rm -f "$ENV_FILE.bak"
-        fi
-    fi
-}
-
 # ─── Java check ──────────────────────────────────────────────────────────────
 
 ensure_java() {
@@ -334,7 +321,7 @@ cmd_gateway() {
     load_env
     apply_tenant_overrides
     resolve_api_key
-    sync_api_key_to_env
+    sync_api_key_to_all_envs "$COMPOSE_DIR"
     ensure_docker
     ensure_image jaiclaw-gateway-app
 

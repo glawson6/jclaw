@@ -1,7 +1,6 @@
 package io.jaiclaw.tools.security;
 
-import io.jaiclaw.core.tenant.TenantContext;
-import io.jaiclaw.core.tenant.TenantContextHolder;
+import io.jaiclaw.core.tenant.TenantGuard;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -10,22 +9,31 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * In-memory store for active handshake sessions.
- * In multi-tenant mode, validates tenant context on session retrieval.
+ * In multi-tenant mode, validates tenant context on session retrieval via {@link TenantGuard}.
  */
 public class HandshakeSessionStore {
 
     private final ConcurrentMap<String, HandshakeSession> sessions = new ConcurrentHashMap<>();
+    private final TenantGuard tenantGuard;
+
+    public HandshakeSessionStore() {
+        this(null);
+    }
+
+    public HandshakeSessionStore(TenantGuard tenantGuard) {
+        this.tenantGuard = tenantGuard;
+    }
 
     /**
      * Create a new handshake session with a random ID.
-     * Stamps the current tenantId from {@link TenantContextHolder} if available.
+     * Stamps the current tenantId from {@link TenantGuard} if available.
      */
     public HandshakeSession create() {
         String id = UUID.randomUUID().toString();
         HandshakeSession session = new HandshakeSession(id);
-        TenantContext ctx = TenantContextHolder.get();
-        if (ctx != null) {
-            session.setTenantId(ctx.getTenantId());
+        String tenantId = tenantGuard != null ? tenantGuard.requireTenantIfMulti() : null;
+        if (tenantId != null) {
+            session.setTenantId(tenantId);
         }
         sessions.put(id, session);
         return session;
@@ -86,8 +94,8 @@ public class HandshakeSessionStore {
     }
 
     private boolean isTenantMatch(HandshakeSession session) {
-        TenantContext ctx = TenantContextHolder.get();
-        if (ctx == null || session.getTenantId() == null) return true;
-        return ctx.getTenantId().equals(session.getTenantId());
+        String currentTenant = tenantGuard != null ? tenantGuard.requireTenantIfMulti() : null;
+        if (currentTenant == null || session.getTenantId() == null) return true;
+        return currentTenant.equals(session.getTenantId());
     }
 }
