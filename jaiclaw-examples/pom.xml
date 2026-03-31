@@ -34,5 +34,6 @@
         <module>code-scaffolder</module>
         <module>telegram-docstore</module>
         <module>system-monitor</module>
+        <module>voice-call-demo</module>
     </modules>
 </project>

@@ -1,0 +1,71 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+# ── Voice Call configuration ──────────────────────────────────────
+jaiclaw:
+  voice-call:
+    enabled: true
+    provider: twilio
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+    serve:
+      webhook-path: /voice/webhook
+      public-url: ${PUBLIC_URL:}              # e.g. https://abc.ngrok.io
+    outbound:
+      from-number: ${TWILIO_PHONE_NUMBER:}    # Your Twilio number (E.164)
+      default-mode: CONVERSATION
+      max-duration-sec: 600
+      silence-timeout-sec: 30
+    inbound:
+      policy: ${INBOUND_POLICY:open}          # open for demo; use allowlist in production
+      greeting: "Hello! Thank you for calling. How can I help you today?"
+      voice: Polly.Amy
+      allowed-from: []
+    streaming:
+      openai-api-key: ${OPENAI_API_KEY:}
+
+  # ── Agent configuration ──────────────────────────────────────────
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:api-key}
+    api-key: ${JAICLAW_API_KEY:}
+  identity:
+    name: Voice Call Demo
+    description: Telephony demo with appointment reminders and customer service
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: Voice Call Agent
+        tools:
+          profile: full
+  skills:
+    allow-bundled:
+      - voice-call
+      - voice-call-demo
+  plugins:
+    enabled: false
+  channels:
+    telegram:
+      enabled: false
+
+# ── Spring configuration ─────────────────────────────────────────
+spring:
+  application:
+    name: jaiclaw-voice-call-demo
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+    openai:
+      enabled: ${OPENAI_ENABLED:false}
+      api-key: ${OPENAI_API_KEY:not-set}
+    ollama:
+      enabled: ${OLLAMA_ENABLED:false}
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
