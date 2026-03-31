@@ -12,6 +12,7 @@ import io.jaiclaw.config.TenantAgentConfig;
 import io.jaiclaw.core.agent.*;
 import io.jaiclaw.core.hook.HookName;
 import io.jaiclaw.core.model.AssistantMessage;
+import io.jaiclaw.core.model.TokenUsage;
 import io.jaiclaw.core.model.UserMessage;
 import io.jaiclaw.core.skill.SkillDefinition;
 import io.jaiclaw.core.tool.ToolCallback;
@@ -318,6 +319,7 @@ public class AgentRuntime {
 
         // 11. Branch on tool loop mode
         String responseContent;
+        TokenUsage tokenUsage = TokenUsage.ZERO;
         if (effectiveToolLoopConfig.mode() == ToolLoopConfig.Mode.EXPLICIT && effectiveChatModel != null) {
             // Explicit loop with hook observability and approval gates
             Map<String, org.springframework.ai.tool.ToolCallback> toolsByName = springTools.stream()
@@ -330,6 +332,7 @@ public class AgentRuntime {
             var result = loop.execute(systemPrompt, new ArrayList<>(historyMessages),
                     userInput, toolsByName, context.sessionKey());
             responseContent = result.finalText();
+            tokenUsage = result.totalUsage();
         } else {
             // Spring AI built-in loop (default)
             ChatClient chatClient = effectiveClientBuilder.build();
@@ -339,19 +342,38 @@ public class AgentRuntime {
                     .user(userInput)
                     .toolCallbacks(springTools.toArray(new org.springframework.ai.tool.ToolCallback[0]));
 
-            var chatResponse = callSpec.call();
-            responseContent = chatResponse.content();
+            var chatResponse = callSpec.call().chatResponse();
+            responseContent = chatResponse != null && chatResponse.getResult() != null
+                    ? chatResponse.getResult().getOutput().getText() : null;
+            tokenUsage = ExplicitToolLoop.extractUsage(chatResponse);
+
+            LlmTraceLogger.logRequest(systemPrompt, new ArrayList<>(historyMessages),
+                    userInput, tokenUsage.inputTokens());
+            LlmTraceLogger.logResponse(responseContent, tokenUsage.outputTokens());
+        }
+
+        // 11a. Log token usage
+        log.info("LLM usage — request: {} tokens, response: {} tokens, total: {} tokens",
+                String.format("%,d", tokenUsage.inputTokens()),
+                String.format("%,d", tokenUsage.outputTokens()),
+                String.format("%,d", tokenUsage.totalTokens()));
+        if (tokenUsage.cacheReadTokens() > 0 || tokenUsage.cacheWriteTokens() > 0) {
+            log.info("LLM cache — read: {} tokens, write: {} tokens",
+                    String.format("%,d", tokenUsage.cacheReadTokens()),
+                    String.format("%,d", tokenUsage.cacheWriteTokens()));
         }
 
         // 12. LLM_OUTPUT hook
         fireVoid(HookName.LLM_OUTPUT, responseContent, context.sessionKey());
 
         // 13. Record assistant message in session
-        AssistantMessage assistantMessage = new AssistantMessage(
-                UUID.randomUUID().toString(),
-                responseContent != null ? responseContent : "",
-                "default"
-        );
+        AssistantMessage assistantMessage = AssistantMessage.builder()
+                .id(UUID.randomUUID().toString())
+                .content(responseContent != null ? responseContent : "")
+                .modelId("default")
+                .usage(tokenUsage)
+                .metadata(Map.of())
+                .build();
         sessionManager.appendMessage(context.sessionKey(), assistantMessage);
 
         // 14. AGENT_END hook

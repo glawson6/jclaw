@@ -2,10 +2,8 @@ package io.jaiclaw.agent;
 
 import io.jaiclaw.core.model.AgentIdentity;
 import io.jaiclaw.core.skill.SkillDefinition;
-import io.jaiclaw.core.tool.ToolCallback;
 
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -15,7 +13,6 @@ public class SystemPromptBuilder {
 
     private AgentIdentity identity = AgentIdentity.DEFAULT;
     private List<SkillDefinition> skills = List.of();
-    private Collection<? extends ToolCallback> tools = List.of();
     private String additionalInstructions = "";
 
     public SystemPromptBuilder identity(AgentIdentity identity) {
@@ -28,8 +25,11 @@ public class SystemPromptBuilder {
         return this;
     }
 
-    public SystemPromptBuilder tools(Collection<? extends ToolCallback> tools) {
-        this.tools = tools;
+    /**
+     * @deprecated Tools are now sent as structured JSON schemas by Spring AI. This setter is a no-op.
+     */
+    @Deprecated
+    public SystemPromptBuilder tools(Object tools) {
         return this;
     }
 
@@ -65,23 +65,8 @@ public class SystemPromptBuilder {
             }
         }
 
-        // Tools section
-        if (!tools.isEmpty()) {
-            sb.append("# Available Tools\n\n");
-            String currentSection = "";
-            var sorted = tools.stream()
-                    .sorted((a, b) -> a.definition().section().compareTo(b.definition().section()))
-                    .toList();
-            for (var tool : sorted) {
-                var def = tool.definition();
-                if (!def.section().equals(currentSection)) {
-                    currentSection = def.section();
-                    sb.append("## ").append(currentSection).append("\n\n");
-                }
-                sb.append("- **").append(def.name()).append("**: ").append(def.description()).append('\n');
-            }
-            sb.append('\n');
-        }
+        // Tools section omitted — Spring AI sends tool definitions as structured JSON schemas
+        // in the API request. Duplicating them in the system prompt wastes tokens.
 
         // Additional instructions
         if (!additionalInstructions.isBlank()) {

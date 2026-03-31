@@ -23,6 +23,9 @@ import io.jaiclaw.core.tenant.TenantProperties;
 import io.jaiclaw.memory.InMemorySearchManager;
 import io.jaiclaw.memory.MemorySearchManager;
 import io.jaiclaw.memory.VectorStoreSearchManager;
+import io.jaiclaw.plugin.JaiClawPlugin;
+import io.jaiclaw.plugin.PluginDiscovery;
+import io.jaiclaw.plugin.PluginOrigin;
 import io.jaiclaw.plugin.PluginRegistry;
 import io.jaiclaw.skills.SkillLoader;
 import io.jaiclaw.tools.ToolRegistry;
@@ -51,6 +54,7 @@ import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.http.HttpClient;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Core Spring Boot auto-configuration that wires all JaiClaw modules together.
@@ -216,6 +220,25 @@ public class JaiClawAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public PluginDiscovery pluginDiscovery(ToolRegistry toolRegistry,
+                                            PluginRegistry pluginRegistry,
+                                            ObjectProvider<List<JaiClawPlugin>> pluginsProvider) {
+        PluginDiscovery discovery = new PluginDiscovery(toolRegistry, pluginRegistry);
+
+        // Initialize Spring-managed JaiClawPlugin beans
+        List<JaiClawPlugin> plugins = pluginsProvider.getIfAvailable();
+        if (plugins != null && !plugins.isEmpty()) {
+            discovery.initializeAll(plugins, PluginOrigin.SPRING);
+        }
+
+        // Discover additional plugins via ServiceLoader
+        discovery.discoverServiceLoader();
+
+        return discovery;
+    }
+
+    @Bean
     @ConditionalOnMissingBean(MemorySearchManager.class)
     @ConditionalOnClass(name = "org.springframework.ai.vectorstore.VectorStore")
     @ConditionalOnBean(type = "org.springframework.ai.vectorstore.VectorStore")
@@ -347,7 +370,7 @@ public class JaiClawAutoConfiguration {
                 : io.jaiclaw.config.AgentProperties.AgentConfig.DEFAULT;
         ToolLoopConfig toolLoopConfig = agentConfig.toolLoop().toConfig();
 
-        return new AgentRuntime(
+        AgentRuntime runtime = new AgentRuntime(
                 sessionManager,
                 chatClientBuilder,
                 toolRegistry,
@@ -363,6 +386,16 @@ public class JaiClawAutoConfiguration {
                 delegateRegistryProvider.getIfAvailable(),
                 tenantGuard
         );
+
+        Set<String> toolNames = toolRegistry.toolNames();
+        log.info("AgentRuntime initialized — {} tools available: {}", toolNames.size(), toolNames);
+        if (!skills.isEmpty()) {
+            log.info("Skills loaded: {}", skills.stream()
+                    .map(SkillDefinition::name)
+                    .toList());
+        }
+
+        return runtime;
     }
 
     @Bean

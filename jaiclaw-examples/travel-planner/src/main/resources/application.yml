@@ -17,6 +17,8 @@ jaiclaw:
       total cost breakdown, and whether it fits the budget.
       If the user asks about anything unrelated to travel planning, politely redirect them
       back to travel planning.
+  skills:
+    allow-bundled: []
   agent:
     default-agent: default
     agents:
@@ -37,6 +39,13 @@ travel:
   amadeus:
     api-key: ${TRAVEL_AMADEUS_API_KEY:not-set}
     api-secret: ${TRAVEL_AMADEUS_API_SECRET:not-set}
+
+logging:
+  level:
+    # Token usage summary (INFO = on, WARN = off)
+    io.jaiclaw.agent.AgentRuntime: INFO
+    # Full LLM request/response content (off by default, set to TRACE to enable)
+    io.jaiclaw.agent.LlmTraceLogger: WARN
 
 spring:
   autoconfigure:

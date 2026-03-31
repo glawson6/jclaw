@@ -11,3 +11,4 @@ META-INF/
 maven-central-deploy/
 docs/PRIVATE-DOCS-INDEX.md
 /.claude/
+/dependency-update-report.md

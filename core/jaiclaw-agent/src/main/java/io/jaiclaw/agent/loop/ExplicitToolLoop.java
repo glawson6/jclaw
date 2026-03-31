@@ -1,8 +1,10 @@
 package io.jaiclaw.agent.loop;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jaiclaw.agent.LlmTraceLogger;
 import io.jaiclaw.core.agent.*;
 import io.jaiclaw.core.hook.HookName;
+import io.jaiclaw.core.model.TokenUsage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -36,7 +38,7 @@ public class ExplicitToolLoop {
     private final AgentHookDispatcher hooks;
     private final ToolApprovalHandler approvalHandler;
 
-    public record LoopResult(String finalText, List<ToolCallEvent> history, int iterationsUsed) {}
+    public record LoopResult(String finalText, List<ToolCallEvent> history, int iterationsUsed, TokenUsage totalUsage) {}
 
     public ExplicitToolLoop(ChatModel chatModel, ToolLoopConfig config,
                             AgentHookDispatcher hooks, ToolApprovalHandler approvalHandler) {
@@ -55,6 +57,7 @@ public class ExplicitToolLoop {
         messages.add(new UserMessage(userInput));
 
         List<ToolCallEvent> toolCallHistory = new ArrayList<>();
+        TokenUsage accumulatedUsage = TokenUsage.ZERO;
 
         for (int i = 0; i < config.maxIterations(); i++) {
             var options = ToolCallingChatOptions.builder()
@@ -65,8 +68,14 @@ public class ExplicitToolLoop {
             ChatResponse response = chatModel.call(new Prompt(messages, options));
             var output = response.getResult().getOutput();
 
+            TokenUsage iterationUsage = extractUsage(response);
+            accumulatedUsage = accumulatedUsage.add(iterationUsage);
+
+            LlmTraceLogger.logIteration(i + 1, messages, output.getText(),
+                    iterationUsage.inputTokens(), iterationUsage.outputTokens());
+
             if (output.getToolCalls() == null || output.getToolCalls().isEmpty()) {
-                return new LoopResult(output.getText(), toolCallHistory, i + 1);
+                return new LoopResult(output.getText(), toolCallHistory, i + 1, accumulatedUsage);
             }
 
             // Add the assistant message with tool calls to conversation
@@ -144,7 +153,7 @@ public class ExplicitToolLoop {
         }
 
         log.warn("Explicit tool loop hit max iterations ({}) for session {}", config.maxIterations(), sessionKey);
-        return new LoopResult("Max iterations reached (" + config.maxIterations() + ")", toolCallHistory, config.maxIterations());
+        return new LoopResult("Max iterations reached (" + config.maxIterations() + ")", toolCallHistory, config.maxIterations(), accumulatedUsage);
     }
 
     @SuppressWarnings("unchecked")
@@ -155,5 +164,35 @@ public class ExplicitToolLoop {
         } catch (Exception e) {
             return Map.of();
         }
+    }
+
+    public static TokenUsage extractUsage(ChatResponse response) {
+        if (response == null || response.getMetadata() == null) return TokenUsage.ZERO;
+        var usage = response.getMetadata().getUsage();
+        if (usage == null) return TokenUsage.ZERO;
+
+        int input = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
+        int output = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
+
+        int cacheRead = 0;
+        int cacheWrite = 0;
+        Object nativeUsage = usage.getNativeUsage();
+        if (nativeUsage != null) {
+            try {
+                // Use reflection to avoid compile-time dependency on spring-ai-anthropic
+                var cacheReadMethod = nativeUsage.getClass().getMethod("cacheReadInputTokens");
+                var cacheWriteMethod = nativeUsage.getClass().getMethod("cacheCreationInputTokens");
+                Integer cr = (Integer) cacheReadMethod.invoke(nativeUsage);
+                Integer cw = (Integer) cacheWriteMethod.invoke(nativeUsage);
+                if (cr != null) cacheRead = cr;
+                if (cw != null) cacheWrite = cw;
+            } catch (NoSuchMethodException e) {
+                // Not an Anthropic response — no cache tokens
+            } catch (Exception e) {
+                log.debug("Failed to extract cache token usage", e);
+            }
+        }
+
+        return new TokenUsage(input, output, cacheRead, cacheWrite);
     }
 }

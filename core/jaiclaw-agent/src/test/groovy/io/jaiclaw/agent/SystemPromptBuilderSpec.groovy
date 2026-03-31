@@ -59,7 +59,7 @@ class SystemPromptBuilderSpec extends Specification {
         prompt.contains("## code-review")
     }
 
-    def "includes tools section grouped by section"() {
+    def "tools() is a deprecated no-op — Spring AI sends tool schemas directly"() {
         given:
         def tools = [
             stubTool("file_read", "Read a file", "Files"),
@@ -70,11 +70,9 @@ class SystemPromptBuilderSpec extends Specification {
         def prompt = builder.tools(tools).build()
 
         then:
-        prompt.contains("# Available Tools")
-        prompt.contains("## Execution")
-        prompt.contains("## Files")
-        prompt.contains("**file_read**")
-        prompt.contains("**shell_exec**")
+        !prompt.contains("# Available Tools")
+        !prompt.contains("file_read")
+        !prompt.contains("shell_exec")
     }
 
     def "includes additional instructions"() {

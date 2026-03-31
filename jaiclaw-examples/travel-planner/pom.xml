@@ -15,6 +15,11 @@
     <description>Multi-step trip planning — Embabel GOAP agent + JaiClaw plugin tools with swappable data providers</description>
 
     <dependencies>
+
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-gateway</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.jaiclaw</groupId>
             <artifactId>jaiclaw-starter-embabel</artifactId>
@@ -35,10 +40,6 @@
         <dependency>
             <groupId>io.jaiclaw</groupId>
             <artifactId>jaiclaw-voice</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.jaiclaw</groupId>
-            <artifactId>jaiclaw-gateway</artifactId>
         </dependency>
         <dependency>
             <groupId>io.jaiclaw</groupId>
