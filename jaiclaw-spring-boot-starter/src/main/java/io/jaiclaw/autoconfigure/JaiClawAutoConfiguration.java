@@ -28,6 +28,8 @@ import io.jaiclaw.skills.SkillLoader;
 import io.jaiclaw.tools.ToolRegistry;
 import io.jaiclaw.tools.bridge.embabel.AgentOrchestrationPort;
 import io.jaiclaw.tools.builtin.BuiltinTools;
+import io.jaiclaw.tools.exec.ExecPolicyConfig;
+import io.jaiclaw.tools.exec.KubectlPolicyConfig;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -162,10 +164,36 @@ public class JaiClawAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ToolRegistry toolRegistry() {
+    public ToolRegistry toolRegistry(JaiClawProperties properties) {
         var registry = new ToolRegistry();
-        BuiltinTools.registerAll(registry);
+        ExecPolicyConfig execPolicyConfig = toExecPolicyConfig(properties.tools().exec());
+        BuiltinTools.registerAll(registry, execPolicyConfig);
         return registry;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public KubectlPolicyConfig kubectlPolicyConfig(JaiClawProperties properties) {
+        return toKubectlPolicyConfig(properties.tools().exec().kubectl());
+    }
+
+    private static ExecPolicyConfig toExecPolicyConfig(
+            io.jaiclaw.config.ToolsProperties.ExecToolProperties props) {
+        return new ExecPolicyConfig(
+                props.policy(),
+                props.allowedCommands(),
+                props.blockedPatterns(),
+                props.maxTimeout()
+        );
+    }
+
+    private static KubectlPolicyConfig toKubectlPolicyConfig(
+            io.jaiclaw.config.ToolsProperties.KubectlPolicyProperties props) {
+        return new KubectlPolicyConfig(
+                props.policy(),
+                props.allowedVerbs(),
+                props.blockedVerbs()
+        );
     }
 
     @Bean

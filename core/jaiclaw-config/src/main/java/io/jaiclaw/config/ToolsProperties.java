@@ -1,5 +1,6 @@
 package io.jaiclaw.config;
 
+import java.util.List;
 import java.util.Set;
 
 public record ToolsProperties(
@@ -22,8 +23,26 @@ public record ToolsProperties(
     }
 
     public record ExecToolProperties(
-            String host
+            String host,
+            String policy,
+            List<String> allowedCommands,
+            List<String> blockedPatterns,
+            int maxTimeout,
+            KubectlPolicyProperties kubectl
     ) {
-        public static final ExecToolProperties DEFAULT = new ExecToolProperties("sandbox");
+        public static final ExecToolProperties DEFAULT = new ExecToolProperties(
+                "sandbox", "unrestricted", List.of(), List.of(), 300,
+                KubectlPolicyProperties.DEFAULT
+        );
+    }
+
+    public record KubectlPolicyProperties(
+            String policy,
+            List<String> allowedVerbs,
+            List<String> blockedVerbs
+    ) {
+        public static final KubectlPolicyProperties DEFAULT = new KubectlPolicyProperties(
+                "unrestricted", List.of(), List.of()
+        );
     }
 }

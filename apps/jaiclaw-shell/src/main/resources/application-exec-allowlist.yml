@@ -1,0 +1,51 @@
+# Profile: exec-allowlist
+# Activate with: --spring.profiles.active=exec-allowlist
+#   or: SPRING_PROFILES_ACTIVE=exec-allowlist
+#
+# Restricts shell_exec to a curated list of safe commands.
+# Only the first token (binary name) is checked — arguments are unrestricted.
+# Commands not on the list are rejected immediately.
+#
+# Kubectl policy is unchanged (unrestricted) — combine with
+# exec-readonly-k8s profile to also lock down kubectl.
+
+jaiclaw:
+  tools:
+    exec:
+      policy: allowlist
+      allowed-commands:
+        - git
+        - npm
+        - npx
+        - mvn
+        - gradle
+        - python
+        - python3
+        - pip
+        - node
+        - docker
+        - curl
+        - wget
+        - grep
+        - find
+        - ls
+        - cat
+        - head
+        - tail
+        - wc
+        - sort
+        - uniq
+        - diff
+        - echo
+        - date
+        - whoami
+        - pwd
+        - env
+        - java
+        - javac
+        - jar
+      blocked-patterns:
+        - "rm -rf /"
+        - "mkfs"
+        - "> /dev/sd"
+      max-timeout: 300

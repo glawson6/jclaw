@@ -5,6 +5,8 @@ import io.jaiclaw.core.tool.ToolDefinition;
 import io.jaiclaw.core.tool.ToolProfile;
 import io.jaiclaw.core.tool.ToolResult;
 import io.jaiclaw.tools.ToolCatalog;
+import io.jaiclaw.tools.exec.CommandPolicy;
+import io.jaiclaw.tools.exec.ExecPolicyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +43,13 @@ public class ShellExecTool extends AbstractBuiltinTool {
               "required": ["command"]
             }""";
 
+    private final ExecPolicyConfig policyConfig;
+
     public ShellExecTool() {
+        this(ExecPolicyConfig.DEFAULT);
+    }
+
+    public ShellExecTool(ExecPolicyConfig policyConfig) {
         super(new ToolDefinition(
                 "shell_exec",
                 "Execute a shell command and return its stdout/stderr output.",
@@ -48,14 +57,26 @@ public class ShellExecTool extends AbstractBuiltinTool {
                 INPUT_SCHEMA,
                 Set.of(ToolProfile.CODING, ToolProfile.FULL)
         ));
+        this.policyConfig = policyConfig;
     }
 
     @Override
     protected ToolResult doExecute(Map<String, Object> parameters, ToolContext context) throws Exception {
         String command = requireParam(parameters, "command");
+
+        // Validate command against policy
+        Optional<String> violation = CommandPolicy.validate(command, policyConfig);
+        if (violation.isPresent()) {
+            log.warn("Command blocked by policy: {}", violation.get());
+            return new ToolResult.Error("Command blocked: " + violation.get());
+        }
+
         long timeout = parameters.containsKey("timeout")
                 ? ((Number) parameters.get("timeout")).longValue()
                 : DEFAULT_TIMEOUT_SECONDS;
+
+        // Cap timeout at configured maximum
+        timeout = Math.min(timeout, policyConfig.maxTimeout());
 
         log.info("Executing shell command: {}", command);
 
@@ -66,7 +87,7 @@ public class ShellExecTool extends AbstractBuiltinTool {
         Process process = pb.start();
         StringBuilder output = new StringBuilder();
 
-        try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 output.append(line).append('\n');

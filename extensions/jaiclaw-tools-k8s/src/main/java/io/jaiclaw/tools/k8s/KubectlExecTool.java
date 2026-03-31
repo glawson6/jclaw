@@ -6,12 +6,15 @@ import io.jaiclaw.core.tool.ToolProfile;
 import io.jaiclaw.core.tool.ToolResult;
 import io.jaiclaw.tools.ToolCatalog;
 import io.jaiclaw.tools.builtin.AbstractBuiltinTool;
+import io.jaiclaw.tools.exec.CommandPolicy;
+import io.jaiclaw.tools.exec.KubectlPolicyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -44,7 +47,13 @@ public class KubectlExecTool extends AbstractBuiltinTool {
               "required": ["command"]
             }""";
 
+    private final KubectlPolicyConfig policyConfig;
+
     public KubectlExecTool() {
+        this(KubectlPolicyConfig.DEFAULT);
+    }
+
+    public KubectlExecTool(KubectlPolicyConfig policyConfig) {
         super(new ToolDefinition(
                 "kubectl_exec",
                 "Execute any kubectl command. IMPORTANT: Prefer built-in k8s_* tools (k8s_list_pods, k8s_get_pod_logs, etc.) first — only use this for operations not covered by those tools. Before running mutating commands (delete, apply, patch, scale, rollout, drain, cordon, taint, edit), warn the user and request confirmation.",
@@ -52,6 +61,7 @@ public class KubectlExecTool extends AbstractBuiltinTool {
                 INPUT_SCHEMA,
                 Set.of(ToolProfile.FULL)
         ));
+        this.policyConfig = policyConfig;
     }
 
     @Override
@@ -61,9 +71,11 @@ public class KubectlExecTool extends AbstractBuiltinTool {
                 ? ((Number) parameters.get("timeout")).longValue()
                 : DEFAULT_TIMEOUT_SECONDS;
 
-        // Ensure command starts with kubectl
-        if (!command.trim().startsWith("kubectl")) {
-            return new ToolResult.Error("Command must start with 'kubectl'. Got: " + command);
+        // Validate command against kubectl policy
+        Optional<String> violation = CommandPolicy.validateKubectl(command, policyConfig);
+        if (violation.isPresent()) {
+            log.warn("Kubectl command blocked by policy: {}", violation.get());
+            return new ToolResult.Error("Command blocked: " + violation.get());
         }
 
         log.info("Executing kubectl command: {}", command);

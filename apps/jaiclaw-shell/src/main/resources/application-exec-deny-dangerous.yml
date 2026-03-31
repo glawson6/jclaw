@@ -1,0 +1,25 @@
+# Profile: exec-deny-dangerous
+# Activate with: --spring.profiles.active=exec-deny-dangerous
+#   or: SPRING_PROFILES_ACTIVE=exec-deny-dangerous
+#
+# Allows any command EXCEPT those containing shell metacharacters:
+#   ;  |  &&  ||  $(  `  >  <  &
+#
+# This prevents command chaining, piping, redirection, and subshell
+# injection while still allowing normal single-command execution.
+# Good for environments where you need flexibility but want to block
+# the most common injection vectors.
+#
+# Blocked patterns are also enforced on top of metacharacter detection.
+
+jaiclaw:
+  tools:
+    exec:
+      policy: deny-dangerous
+      blocked-patterns:
+        - "rm -rf /"
+        - "mkfs"
+        - "> /dev/sd"
+        - "/dev/null"
+        - ":(){ :|:& };:"
+      max-timeout: 300

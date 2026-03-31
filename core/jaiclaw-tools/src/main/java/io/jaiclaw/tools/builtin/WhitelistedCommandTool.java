@@ -129,11 +129,31 @@ public class WhitelistedCommandTool extends AbstractBuiltinTool {
 
     /**
      * Check if a command starts with any of the allowed prefixes.
+     * Uses token-based matching to prevent prefix bypass (e.g., "git clone-and-exfil").
      */
     boolean isCommandAllowed(String command) {
         String trimmed = command.trim();
         return config.allowedPrefixes().stream()
-                .anyMatch(trimmed::startsWith);
+                .anyMatch(prefix -> matchesPrefix(trimmed, prefix));
+    }
+
+    /**
+     * Token-boundary-aware prefix matching. For single-token prefixes (e.g., "git"),
+     * requires a word boundary after the prefix to prevent "git" matching "git-exfil".
+     * For multi-token prefixes (e.g., "cat /proc/"), uses standard startsWith since
+     * the path prefix acts as a directory constraint.
+     */
+    private static boolean matchesPrefix(String command, String prefix) {
+        if (!command.startsWith(prefix)) {
+            return false;
+        }
+        // Multi-token prefixes (containing spaces) use startsWith — path constraints
+        if (prefix.contains(" ")) {
+            return true;
+        }
+        // Single-token prefixes require a word boundary
+        return command.length() == prefix.length()
+                || Character.isWhitespace(command.charAt(prefix.length()));
     }
 
     /**

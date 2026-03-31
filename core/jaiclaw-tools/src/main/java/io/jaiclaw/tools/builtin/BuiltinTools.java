@@ -2,6 +2,7 @@ package io.jaiclaw.tools.builtin;
 
 import io.jaiclaw.core.tool.ToolCallback;
 import io.jaiclaw.tools.ToolRegistry;
+import io.jaiclaw.tools.exec.ExecPolicyConfig;
 
 import java.util.List;
 
@@ -13,10 +14,14 @@ public final class BuiltinTools {
     private BuiltinTools() {}
 
     public static List<ToolCallback> all() {
+        return all(ExecPolicyConfig.DEFAULT);
+    }
+
+    public static List<ToolCallback> all(ExecPolicyConfig execPolicyConfig) {
         return List.of(
                 new FileReadTool(),
                 new FileWriteTool(),
-                new ShellExecTool(),
+                new ShellExecTool(execPolicyConfig),
                 new WebFetchTool(),
                 new WebSearchTool(),
                 new ClaudeCliTool()
@@ -25,5 +30,9 @@ public final class BuiltinTools {
 
     public static void registerAll(ToolRegistry registry) {
         registry.registerAll(all());
+    }
+
+    public static void registerAll(ToolRegistry registry, ExecPolicyConfig execPolicyConfig) {
+        registry.registerAll(all(execPolicyConfig));
     }
 }

@@ -1,0 +1,72 @@
+# Profile: exec-lockdown
+# Activate with: --spring.profiles.active=exec-lockdown
+#   or: SPRING_PROFILES_ACTIVE=exec-lockdown
+#
+# Maximum security: combines allowlist shell policy with read-only
+# kubectl and aggressive blocked patterns. Use this for production
+# deployments or multi-tenant environments where LLM-initiated
+# commands must be tightly controlled.
+#
+# Shell: only whitelisted binaries, no metacharacters possible
+#        (allowlist policy rejects anything not in the list)
+# Kubectl: read-only + explicit blocked verbs as defense-in-depth
+# Timeout: capped at 120 seconds
+
+jaiclaw:
+  tools:
+    exec:
+      policy: allowlist
+      allowed-commands:
+        - git
+        - mvn
+        - gradle
+        - npm
+        - npx
+        - python
+        - python3
+        - node
+        - java
+        - javac
+        - grep
+        - find
+        - ls
+        - cat
+        - head
+        - tail
+        - wc
+        - echo
+        - date
+        - pwd
+      blocked-patterns:
+        - "rm -rf /"
+        - "rm -rf ~"
+        - "mkfs"
+        - "> /dev/sd"
+        - "/dev/null"
+        - ":(){ :|:& };:"
+        - "chmod 777"
+        - "chmod -R 777"
+        - "curl | sh"
+        - "curl | bash"
+        - "wget | sh"
+        - "wget | bash"
+      max-timeout: 120
+      kubectl:
+        policy: read-only
+        blocked-verbs:
+          - delete
+          - exec
+          - apply
+          - patch
+          - drain
+          - cordon
+          - uncordon
+          - taint
+          - edit
+          - create
+          - replace
+          - rollout
+          - scale
+          - autoscale
+          - annotate
+          - label

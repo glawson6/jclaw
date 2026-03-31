@@ -1,8 +1,10 @@
 package io.jaiclaw.tools.k8s;
 
 import io.jaiclaw.tools.ToolRegistry;
+import io.jaiclaw.tools.exec.KubectlPolicyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -34,9 +36,12 @@ public class KubernetesToolsAutoConfiguration {
     @Bean
     public KubernetesToolsRegistrar kubernetesToolsRegistrar(
             ToolRegistry toolRegistry,
-            KubernetesClientProvider clientProvider) {
-        log.info("Registering Kubernetes tools into ToolRegistry");
-        KubernetesTools.registerAll(toolRegistry, clientProvider);
+            KubernetesClientProvider clientProvider,
+            ObjectProvider<KubectlPolicyConfig> kubectlPolicyConfigProvider) {
+        KubectlPolicyConfig policyConfig = kubectlPolicyConfigProvider.getIfAvailable(
+                () -> KubectlPolicyConfig.DEFAULT);
+        log.info("Registering Kubernetes tools into ToolRegistry (kubectl policy: {})", policyConfig.policy());
+        KubernetesTools.registerAll(toolRegistry, clientProvider, policyConfig);
         return new KubernetesToolsRegistrar();
     }
 

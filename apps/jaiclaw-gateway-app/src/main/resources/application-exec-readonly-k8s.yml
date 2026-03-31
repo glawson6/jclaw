@@ -1,0 +1,33 @@
+# Profile: exec-readonly-k8s
+# Activate with: --spring.profiles.active=exec-readonly-k8s
+#   or: SPRING_PROFILES_ACTIVE=exec-readonly-k8s
+#
+# Restricts kubectl_exec to read-only operations:
+#   get, describe, logs, top, explain, api-resources, api-versions
+#
+# All mutating verbs (delete, apply, patch, exec, drain, etc.) are
+# rejected. Shell policy is unchanged — combine with exec-allowlist
+# or exec-deny-dangerous to also restrict shell commands.
+
+jaiclaw:
+  tools:
+    exec:
+      kubectl:
+        policy: read-only
+        blocked-verbs:
+          - delete
+          - exec
+          - apply
+          - patch
+          - drain
+          - cordon
+          - uncordon
+          - taint
+          - edit
+          - create
+          - replace
+          - rollout
+          - scale
+          - autoscale
+          - annotate
+          - label
