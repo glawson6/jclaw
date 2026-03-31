@@ -134,3 +134,25 @@ print_security_info() {
             ;;
     esac
 }
+
+# ─── Auth Status Check ───────────────────────────────────────────────────────
+#
+# Checks OAuth token status and prints a warning if tokens are expiring/expired.
+# Non-blocking — returns 0 even on auth issues (it's just a heads-up).
+# Usage: check_auth_status [path_to_auth_status_script]
+#
+check_auth_status() {
+    local auth_script="${1:-}"
+    if [ -z "$auth_script" ]; then
+        auth_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/auth-status.sh"
+    fi
+    [ ! -x "$auth_script" ] && return 0
+    local status
+    status=$("$auth_script" simple 2>/dev/null) || return 0
+    case "$status" in
+        OK)       return 0 ;;
+        EXPIRING) warn "OAuth tokens expiring soon. Run './start.sh auth' to check or './start.sh login' to re-authenticate." ;;
+        EXPIRED)  warn "OAuth tokens EXPIRED! Run './start.sh login <provider>' to re-authenticate." ;;
+    esac
+    return 0
+}

@@ -4,6 +4,7 @@ target/
 *.class
 CLAUDE.md
 docker-compose/.env
+docker-compose/docker-compose.auth-volumes.yml
 *.log
 hs_err_pid*
 META-INF/

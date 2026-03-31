@@ -76,6 +76,38 @@ Beyond identity linking, this module manages upstream provider credentials via O
 | `AuthProfileStoreManager` | File-based credential store with locking and merge |
 | `OAuthProviderConfig` | Provider endpoints, client credentials, scopes |
 
+## Script Integration
+
+OAuth credential management is accessible from startup scripts (no Java REPL required):
+
+```bash
+# Check all auth profiles and external CLI credentials
+./start.sh auth                  # colored table
+./start.sh auth json             # machine-readable JSON
+
+# OAuth login for upstream providers
+./start.sh login                 # list providers
+./start.sh login chutes          # browser-based OAuth (Chutes AI)
+./start.sh login qwen-portal     # device code flow (Qwen)
+
+# Standalone tools
+./scripts/auth-status.sh simple  # one-line status (exit codes: 0=OK, 1=EXPIRED, 2=EXPIRING, 3=MISSING)
+jbang JaiClawAuth.java status    # profile status via JBang (no Spring context)
+jbang JaiClawAuth.java logout chutes:user@email.com  # remove a profile
+
+# Monitoring (cron)
+./scripts/setup-auth-monitor.sh  # install cron/systemd timer for expiry alerts
+```
+
+All launch commands (`./start.sh local`, `shell`, `cli`, `docker`) automatically check auth status on startup and warn about expiring/expired tokens.
+
+**Credential files checked:**
+- JaiClaw profiles: `~/.jaiclaw/agents/default/agent/auth-profiles.json`
+- Claude Code: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+- Qwen: `~/.qwen/oauth_creds.json`
+- MiniMax: `~/.minimax/oauth_creds.json`
+
 ## Integration
 
 When a message arrives on any channel, use `IdentityResolver.resolve(channel, userId)` to get the canonical ID. This canonical ID can then be used for:

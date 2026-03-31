@@ -22,6 +22,10 @@ export JAVA_HOME=/Users/tap/.sdkman/candidates/java/21.0.9-oracle
 ./start.sh cli          # start interactive CLI shell (Docker, no Java needed)
 ./start.sh docker       # start gateway via Docker Compose
 ./start.sh local        # start gateway locally (same as default)
+./start.sh login        # list available OAuth providers
+./start.sh login chutes # run OAuth login for a provider
+./start.sh auth         # show auth profile status (colored table)
+./start.sh auth json    # show auth profile status (JSON)
 ./start.sh stop         # stop Docker Compose stack
 ./start.sh logs         # tail gateway container logs
 ./start.sh --force-build          # rebuild from source, then start gateway locally
@@ -44,6 +48,43 @@ OLLAMA_ENABLED=false
 ```
 
 Both the gateway (Docker and local) and the shell read from this file. Environment variables set in your shell override `.env` values. Run `./quickstart.sh --reconfigure` to change the config location, re-enter API keys, or change the security mode.
+
+### Auth & OAuth
+
+JaiClaw supports OAuth authentication for upstream LLM providers (Chutes, OpenAI Codex, Google Gemini CLI, Qwen, MiniMax) in addition to API keys. OAuth tokens are stored in `~/.jaiclaw/agents/default/agent/auth-profiles.json`.
+
+**Check auth status:**
+
+```bash
+./start.sh auth              # colored table of all profiles + external CLI credentials
+./start.sh auth json         # machine-readable JSON output
+./scripts/auth-status.sh simple  # one-line: OK|EXPIRING|EXPIRED|MISSING (exit codes: 0/1/2/3)
+```
+
+**OAuth login:**
+
+```bash
+./start.sh login             # list available OAuth providers
+./start.sh login chutes      # browser-based OAuth for Chutes AI
+./start.sh login qwen-portal # device code flow for Qwen
+```
+
+Available providers: `chutes`, `openai-codex`, `google-gemini-cli`, `qwen-portal`, `minimax-portal`.
+
+Login uses JBang (`JaiClawAuth.java`) if available, otherwise falls back to Maven + Spring Shell.
+
+**Startup warnings:** All launch commands (`local`, `shell`, `cli`, `docker`) automatically check auth status and print a non-blocking warning if any OAuth tokens are expiring or expired.
+
+**Auth monitoring (cron):**
+
+```bash
+./scripts/setup-auth-monitor.sh       # interactive wizard to install cron/systemd timer
+./scripts/auth-monitor.sh             # manual check (cron-compatible)
+```
+
+Supports ntfy.sh and email notifications. Configure via `JAICLAW_NOTIFY_NTFY`, `JAICLAW_NOTIFY_EMAIL`, and `JAICLAW_AUTH_WARN_HOURS` env vars.
+
+**Docker auth volume mounting:** When running in Docker mode, credential directories (`~/.jaiclaw`, `~/.claude`, `~/.codex`, `~/.qwen`, `~/.minimax`) are automatically mounted read-only into containers. Control with `JAICLAW_DOCKER_AUTH_DIRS` (values: `auto`, `all`, `none`, or comma-separated provider keys).
 
 ### Gateway (Local — default)
 
@@ -128,6 +169,16 @@ To re-run the full interactive setup (change provider, API keys, channels, confi
 ```bash
 ./quickstart.sh --reconfigure
 ```
+
+The reconfigure wizard now includes OAuth providers (Chutes, OpenAI Codex, Gemini CLI, Qwen, MiniMax) in addition to API key providers.
+
+**Non-interactive mode** (for CI/CD or scripted deployments):
+
+```bash
+AI_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... ./quickstart.sh --non-interactive --docker
+```
+
+Required env vars: `AI_PROVIDER` (or a provider API key for auto-detection). OAuth providers in non-interactive mode are skipped (assumed pre-authenticated).
 
 After quickstart completes, use `./start.sh` for subsequent runs.
 

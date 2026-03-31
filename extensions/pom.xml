@@ -34,5 +34,8 @@
         <module>jaiclaw-cron-manager</module>
         <module>jaiclaw-calendar</module>
         <module>jaiclaw-messaging</module>
+        <module>jaiclaw-discord-tools</module>
+        <module>jaiclaw-slack-tools</module>
+        <module>jaiclaw-voice-call</module>
     </modules>
 </project>

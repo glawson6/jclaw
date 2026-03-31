@@ -14,6 +14,7 @@
 #   ./quickstart.sh --cron-manager # also build + start the cron-manager sidecar
 #   ./quickstart.sh --force-build  # force rebuild
 #   ./quickstart.sh --reconfigure  # re-run interactive setup (provider, keys, channels)
+#   AI_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-... ./quickstart.sh --non-interactive --docker
 #
 set -euo pipefail
 
@@ -35,6 +36,41 @@ source "$JAICLAW_DIR/scripts/common.sh"
 
 # Extra helpers unique to quickstart
 debug() { printf "${DIM}  … %s${NC}\n" "$*"; }
+
+# Prompt with a default — respects NON_INTERACTIVE mode.
+# Usage: ask_or_default "prompt" "default_value" RESULT_VAR
+ask_or_default() {
+    local prompt="$1"
+    local default="$2"
+    local varname="$3"
+    if [ "${NON_INTERACTIVE:-false}" = true ]; then
+        eval "$varname=\"$default\""
+        return
+    fi
+    local answer
+    read -rp "$(printf "${CYAN}▸${NC} %s" "$prompt")" answer
+    eval "$varname=\"${answer:-$default}\""
+}
+
+# Run OAuth login inline (uses JBang or Maven)
+run_oauth_login() {
+    local provider="$1"
+    if command -v jbang &>/dev/null && [ -f "$JAICLAW_DIR/JaiClawAuth.java" ]; then
+        jbang "$JAICLAW_DIR/JaiClawAuth.java" login "$provider"
+    elif check_java; then
+        info "Running OAuth login via Maven..."
+        (cd "$JAICLAW_DIR" && \
+         ./mvnw -q spring-boot:run -pl :jaiclaw-shell \
+         -Dspring-boot.run.arguments="login $provider" \
+         -Dspring.main.web-application-type=none 2>&1) || {
+            warn "OAuth login failed — you can try again later with: ./start.sh login $provider"
+            return 1
+        }
+    else
+        warn "OAuth login requires Java 21+ or JBang. Install one and run: ./start.sh login $provider"
+        return 1
+    fi
+}
 
 # Run a command with a description, showing elapsed time on completion
 # Usage: run_step "description" command args...
@@ -463,6 +499,19 @@ resolve_env_file() {
         return
     fi
 
+    # Non-interactive: default to ~/.jaiclaw/.env
+    if [ "${NON_INTERACTIVE:-false}" = true ]; then
+        ENV_FILE="$HOME/.jaiclaw/.env"
+        mkdir -p "$HOME/.jaiclaw"
+        echo "JAICLAW_ENV_FILE=\"$ENV_FILE\"" > "$HOME/.jaiclawrc"
+        export JAICLAW_ENV_FILE="$ENV_FILE"
+        if [ ! -f "$ENV_FILE" ] && [ -f "$compose_dir/.env.example" ]; then
+            cp "$compose_dir/.env.example" "$ENV_FILE"
+        fi
+        ok "Config location: $ENV_FILE (non-interactive default)"
+        return
+    fi
+
     # First run — prompt the user
     echo ""
     printf "${BOLD}Where should configuration be saved?${NC}\n"
@@ -546,10 +595,16 @@ reconfigure() {
     # Step 2: LLM provider
     echo ""
     printf "${BOLD}Select LLM provider:${NC}\n"
-    echo "  1. Anthropic (Claude)"
-    echo "  2. OpenAI"
-    echo "  3. Google Gemini"
+    echo "  1. Anthropic (Claude) — API key"
+    echo "  2. OpenAI — API key"
+    echo "  3. Google Gemini — API key"
     echo "  4. Ollama (local, free)"
+    printf "  ${DIM}── OAuth Providers (browser/device login) ──${NC}\n"
+    echo "  5. Chutes AI (OAuth)"
+    echo "  6. OpenAI Codex (OAuth)"
+    echo "  7. Google Gemini CLI (OAuth)"
+    echo "  8. Qwen Portal (device code)"
+    echo "  9. MiniMax Portal (device code)"
     echo ""
     read -rp "$(printf "${CYAN}▸${NC} Choice [1]: ")" provider_choice
     provider_choice="${provider_choice:-1}"
@@ -600,6 +655,54 @@ reconfigure() {
             sed -i.bak "s|^ANTHROPIC_ENABLED=.*|ANTHROPIC_ENABLED=false|" "$ENV_FILE"
             rm -f "$ENV_FILE.bak"
             ok "Ollama selected — will start with Docker Compose"
+            ;;
+        5)
+            info "Starting Chutes AI OAuth login..."
+            if run_oauth_login "chutes"; then
+                ok "Chutes AI OAuth configured"
+            else
+                warn "OAuth failed. You can try again later: ./start.sh login chutes"
+                echo ""
+                read -rp "$(printf "${CYAN}▸${NC} Enter API key as fallback (or press Enter to skip): ")" api_key
+                if [ -n "$api_key" ]; then
+                    sed -i.bak "s|^AI_PROVIDER=.*|AI_PROVIDER=anthropic|" "$ENV_FILE"
+                    sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=${api_key}|" "$ENV_FILE"
+                    rm -f "$ENV_FILE.bak"
+                    ok "Fallback API key saved"
+                fi
+            fi
+            ;;
+        6)
+            info "Starting OpenAI Codex OAuth login..."
+            if run_oauth_login "openai-codex"; then
+                ok "OpenAI Codex OAuth configured"
+            else
+                warn "OAuth failed. You can try again later: ./start.sh login openai-codex"
+            fi
+            ;;
+        7)
+            info "Starting Google Gemini CLI OAuth login..."
+            if run_oauth_login "google-gemini-cli"; then
+                ok "Google Gemini CLI OAuth configured"
+            else
+                warn "OAuth failed. You can try again later: ./start.sh login google-gemini-cli"
+            fi
+            ;;
+        8)
+            info "Starting Qwen Portal device code login..."
+            if run_oauth_login "qwen-portal"; then
+                ok "Qwen Portal OAuth configured"
+            else
+                warn "OAuth failed. You can try again later: ./start.sh login qwen-portal"
+            fi
+            ;;
+        9)
+            info "Starting MiniMax Portal device code login..."
+            if run_oauth_login "minimax-portal"; then
+                ok "MiniMax Portal OAuth configured"
+            else
+                warn "OAuth failed. You can try again later: ./start.sh login minimax-portal"
+            fi
             ;;
         *)
             warn "Invalid choice, keeping current provider"
@@ -759,6 +862,17 @@ start_stack() {
 TELEGRAM_BOT_USERNAME=""
 
 setup_telegram() {
+    # Skip in non-interactive mode (use TELEGRAM_BOT_TOKEN env var if set)
+    if [ "${NON_INTERACTIVE:-false}" = true ]; then
+        if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            sed -i.bak "s|^TELEGRAM_ENABLED=.*|TELEGRAM_ENABLED=true|" "$ENV_FILE"
+            sed -i.bak "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}|" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+            ok "Telegram configured from environment"
+        fi
+        return
+    fi
+
     echo ""
     read -rp "$(printf "${CYAN}▸${NC} Set up Telegram bot? (y/N): ")" setup_tg
     if [[ ! "$setup_tg" =~ ^[Yy]$ ]]; then
@@ -849,6 +963,7 @@ main() {
     local with_cron_manager=false
     RUN_MODE=auto   # auto | local | docker
     FORCE_BUILD=false
+    NON_INTERACTIVE=false
 
     # Parse arguments
     for arg in "$@"; do
@@ -859,6 +974,7 @@ main() {
             --cron-manager)  with_cron_manager=true ;;
             --force-build)   FORCE_BUILD=true ;;
             --reconfigure)   do_reconfigure=true ;;
+            --non-interactive) NON_INTERACTIVE=true ;;
             -h|--help|help)
                 echo "Usage: ./quickstart.sh [options]"
                 echo ""
@@ -873,6 +989,7 @@ main() {
                 echo "  --cron-manager   Also build and start the cron-manager sidecar"
                 echo "  --force-build    Force rebuild even if JARs/images already exist"
                 echo "  --reconfigure    Re-run interactive setup (provider, API keys, channels)"
+                echo "  --non-interactive  Skip all prompts (requires AI_PROVIDER + API key env vars)"
                 echo "  --help           Print this help"
                 exit 0
                 ;;
@@ -917,6 +1034,46 @@ main() {
 
     # Resolve .env file location (prompt on first run, read ~/.jaiclawrc on subsequent runs)
     resolve_env_file
+
+    # Non-interactive mode: configure from env vars, skip all prompts
+    if [ "$NON_INTERACTIVE" = true ] && [ "$do_reconfigure" = false ]; then
+        local ni_provider="${AI_PROVIDER:-}"
+        if [ -z "$ni_provider" ]; then
+            # Auto-detect from available API keys
+            if [ -n "${ANTHROPIC_API_KEY:-}" ] && [ "${ANTHROPIC_API_KEY}" != "not-set" ]; then
+                ni_provider="anthropic"
+            elif [ -n "${OPENAI_API_KEY:-}" ] && [ "${OPENAI_API_KEY}" != "not-set" ]; then
+                ni_provider="openai"
+            elif [ -n "${GEMINI_API_KEY:-}" ] && [ "${GEMINI_API_KEY}" != "not-set" ]; then
+                ni_provider="google-genai"
+            else
+                err "Non-interactive mode requires AI_PROVIDER or an API key env var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY)."
+                exit 1
+            fi
+        fi
+        sed -i.bak "s|^AI_PROVIDER=.*|AI_PROVIDER=$ni_provider|" "$ENV_FILE"
+        rm -f "$ENV_FILE.bak"
+        case "$ni_provider" in
+            anthropic)
+                [ -n "${ANTHROPIC_API_KEY:-}" ] && { sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"; }
+                sed -i.bak "s|^ANTHROPIC_ENABLED=.*|ANTHROPIC_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+                ;;
+            openai)
+                [ -n "${OPENAI_API_KEY:-}" ] && { sed -i.bak "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=${OPENAI_API_KEY}|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"; }
+                sed -i.bak "s|^OPENAI_ENABLED=.*|OPENAI_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+                ;;
+            google-genai)
+                [ -n "${GEMINI_API_KEY:-}" ] && { sed -i.bak "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${GEMINI_API_KEY}|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"; }
+                sed -i.bak "s|^GEMINI_ENABLED=.*|GEMINI_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+                ;;
+            ollama)
+                sed -i.bak "s|^OLLAMA_ENABLED=.*|OLLAMA_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+                ;;
+        esac
+        ok "Non-interactive: configured provider '$ni_provider'"
+        # Source the env file so downstream code sees the values
+        set -a; source "$ENV_FILE"; set +a
+    fi
 
     # Reconfigure mode: full interactive re-setup (Docker only — uses docker compose)
     if [ "$do_reconfigure" = true ]; then

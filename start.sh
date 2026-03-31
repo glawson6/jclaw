@@ -15,6 +15,10 @@
 #   ./start.sh cron docker  # start cron-manager via Docker Compose
 #   ./start.sh telegram     # validate Telegram bot token → start gateway (local)
 #   ./start.sh telegram docker  # validate Telegram bot token → start gateway (Docker)
+#   ./start.sh login            # list available OAuth providers
+#   ./start.sh login chutes    # run OAuth login for Chutes provider
+#   ./start.sh auth            # show auth profile status (colored table)
+#   ./start.sh auth json       # show auth profile status (JSON)
 #   ./start.sh --force-build          # rebuild from source, then start gateway locally
 #   ./start.sh --force-build docker  # rebuild Docker image, then start gateway
 #   ./start.sh stop         # stop Docker Compose stack
@@ -27,6 +31,9 @@ COMPOSE_DIR="$SCRIPT_DIR/docker-compose"
 
 # Shared helpers (colors, logging, API key resolution)
 source "$SCRIPT_DIR/scripts/common.sh"
+
+# Docker auth directory mapping (for volume mounts)
+source "$SCRIPT_DIR/scripts/lib/docker-auth-dirs.sh"
 
 # Source persistent config pointer (written by quickstart --reconfigure or first-run prompt)
 [ -f "$HOME/.jaiclawrc" ] && source "$HOME/.jaiclawrc"
@@ -143,18 +150,73 @@ ensure_image() {
     ok "Docker image built: $image"
 }
 
+# ─── Auth Commands ───────────────────────────────────────────────────────────
+
+cmd_login() {
+    local provider="${1:-}"
+    if [ "$provider" = "--list" ] || [ -z "$provider" ]; then
+        echo ""
+        printf "${BOLD}Available OAuth providers:${NC}\n"
+        echo ""
+        echo "  chutes             Chutes AI (browser OAuth)"
+        echo "  openai-codex       OpenAI Codex (browser OAuth)"
+        echo "  google-gemini-cli  Google Gemini CLI (browser OAuth)"
+        echo "  qwen-portal        Qwen Portal (device code)"
+        echo "  minimax-portal     MiniMax Portal (device code)"
+        echo ""
+        echo "Usage: ./start.sh login <provider>"
+        echo ""
+        return 0
+    fi
+
+    # Try JBang first, then fall back to Maven
+    if command -v jbang &>/dev/null && [ -f "$SCRIPT_DIR/JaiClawAuth.java" ]; then
+        jbang "$SCRIPT_DIR/JaiClawAuth.java" login "$provider"
+    else
+        ensure_java
+        info "Running OAuth login via Spring Shell..."
+        (cd "$SCRIPT_DIR" && \
+         ./mvnw -q spring-boot:run -pl :jaiclaw-shell \
+         -Dspring-boot.run.arguments="login $provider" \
+         -Dspring.main.web-application-type=none 2>&1) || {
+            err "Login failed. Make sure the project is built: ./mvnw install -DskipTests"
+            exit 1
+        }
+    fi
+}
+
+cmd_auth() {
+    local subcmd="${1:-status}"
+    case "$subcmd" in
+        status) "$SCRIPT_DIR/scripts/auth-status.sh" full ;;
+        json)   "$SCRIPT_DIR/scripts/auth-status.sh" json ;;
+        *)      err "Unknown: auth $subcmd. Use: auth status|json"
+                exit 1
+                ;;
+    esac
+}
+
 # ─── Commands ────────────────────────────────────────────────────────────────
 
 cmd_gateway() {
     header "JaiClaw Gateway (Docker)"
     load_env
+    check_auth_status "$SCRIPT_DIR/scripts/auth-status.sh"
     resolve_api_key
     sync_api_key_to_all_envs "$COMPOSE_DIR"
     ensure_docker
     ensure_image jaiclaw-gateway-app
 
+    # Generate auth volume mounts for Docker containers
+    local auth_override="$COMPOSE_DIR/docker-compose.auth-volumes.yml"
+    local compose_files=(-f "$COMPOSE_DIR/docker-compose.yml")
+    if generate_auth_volumes_override "$auth_override" "gateway" 2>/dev/null; then
+        compose_files+=(-f "$auth_override")
+        ok "Auth credential directories will be mounted (read-only)"
+    fi
+
     info "Starting gateway container..."
-    docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" up -d
+    docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d
 
     echo ""
     ok "Gateway is running on http://localhost:${GATEWAY_PORT:-8080}"
@@ -175,12 +237,13 @@ cmd_gateway() {
 
     info "Tailing logs (Ctrl+C to detach — gateway keeps running)..."
     echo ""
-    docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" logs -f gateway
+    docker compose "${compose_files[@]}" --env-file "$ENV_FILE" logs -f gateway
 }
 
 cmd_shell() {
     header "JaiClaw Interactive Shell"
     load_env
+    check_auth_status "$SCRIPT_DIR/scripts/auth-status.sh"
     ensure_java
     ensure_local_build "$SCRIPT_DIR/apps/jaiclaw-shell/target/jaiclaw-shell-0.1.0-SNAPSHOT.jar"
 
@@ -197,8 +260,16 @@ cmd_shell() {
 cmd_cli() {
     header "JaiClaw Interactive Shell (Docker)"
     load_env
+    check_auth_status "$SCRIPT_DIR/scripts/auth-status.sh"
     ensure_docker
     ensure_image jaiclaw-shell
+
+    # Generate auth volume mounts for Docker containers
+    local auth_override="$COMPOSE_DIR/docker-compose.auth-volumes.yml"
+    local compose_files=(-f "$COMPOSE_DIR/docker-compose.yml")
+    if generate_auth_volumes_override "$auth_override" "cli" 2>/dev/null; then
+        compose_files+=(-f "$auth_override")
+    fi
 
     echo "Starting interactive shell container..."
     echo ""
@@ -207,12 +278,13 @@ cmd_cli() {
     printf "  ${DIM}Type 'onboard' to run the setup wizard${NC}\n"
     echo ""
 
-    docker compose -f "$COMPOSE_DIR/docker-compose.yml" --env-file "$ENV_FILE" --profile cli run --rm cli
+    docker compose "${compose_files[@]}" --env-file "$ENV_FILE" --profile cli run --rm cli
 }
 
 cmd_local() {
     header "JaiClaw Gateway (Local)"
     load_env
+    check_auth_status "$SCRIPT_DIR/scripts/auth-status.sh"
     resolve_api_key
     ensure_java
     ensure_local_build "$SCRIPT_DIR/apps/jaiclaw-gateway-app/target/jaiclaw-gateway-app-0.1.0-SNAPSHOT.jar"
@@ -371,6 +443,8 @@ case "$COMMAND" in
     docker|gateway)  cmd_gateway ;;
     cron)     cmd_cron "${EXTRA_ARGS[0]:-local}" ;;
     telegram) cmd_telegram "${EXTRA_ARGS[0]:-}" ;;
+    login)    cmd_login "${EXTRA_ARGS[0]:-}" ;;
+    auth)     cmd_auth "${EXTRA_ARGS[0]:-status}" ;;
     stop)     cmd_stop ;;
     logs)     cmd_logs ;;
     -h|--help|help)
@@ -389,6 +463,8 @@ case "$COMMAND" in
         echo "  cron docker      Start cron-manager via Docker Compose"
         echo "  telegram         Validate Telegram bot token and start gateway (local)"
         echo "  telegram docker  Validate Telegram bot token and start gateway (Docker)"
+        echo "  login [provider] OAuth login (run 'login --list' for providers)"
+        echo "  auth [status|json] Show auth profile status"
         echo "  stop             Stop Docker Compose stack"
         echo "  logs             Tail gateway container logs"
         echo ""
