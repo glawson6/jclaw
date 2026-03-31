@@ -14,10 +14,11 @@ public final class OnboardResult {
     private ExistingConfigAction existingConfigAction = ExistingConfigAction.NONE;
 
     // LLM
-    private String llmProvider;       // "openai" | "anthropic" | "ollama"
-    private String llmApiKey;         // null for ollama
+    private String llmProvider;       // "openai" | "anthropic" | "ollama" | "bedrock"
+    private String llmApiKey;         // null for ollama/bedrock
     private String llmModel;          // e.g. "gpt-4o"
     private String ollamaBaseUrl = "http://localhost:11434";
+    private String awsRegion = "us-east-1";
 
     // Security
     private String securityMode = "api-key";  // "api-key" | "jwt" | "none"
@@ -74,6 +75,9 @@ public final class OnboardResult {
 
     public String ollamaBaseUrl() { return ollamaBaseUrl; }
     public void setOllamaBaseUrl(String ollamaBaseUrl) { this.ollamaBaseUrl = ollamaBaseUrl; }
+
+    public String awsRegion() { return awsRegion; }
+    public void setAwsRegion(String awsRegion) { this.awsRegion = awsRegion; }
 
     public String securityMode() { return securityMode; }
     public void setSecurityMode(String securityMode) { this.securityMode = securityMode; }

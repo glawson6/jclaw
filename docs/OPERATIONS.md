@@ -545,6 +545,84 @@ OLLAMA_ENABLED=true
 
 `AI_PROVIDER` selects which one Spring AI uses as the primary `ChatClient`.
 
+### Wizard Model Lists & Fallbacks
+
+The onboard wizard's model selector and the generated config's fallback models are defined in `application.yml` under `jaiclaw.models.providers.*`. This allows updating model lists without recompilation.
+
+**Default configuration:**
+
+```yaml
+jaiclaw:
+  models:
+    providers:
+      openai:
+        display-name: OpenAI
+        fallback-model: gpt-4o-mini
+        wizard-models:
+          - gpt-4o
+          - gpt-4o-mini
+          - gpt-4.1
+          - gpt-4.1-mini
+          - o3-mini
+      anthropic:
+        display-name: Anthropic
+        fallback-model: claude-haiku-4-5-20251001
+        wizard-models:
+          - claude-sonnet-4-6
+          - claude-opus-4-6
+          - claude-haiku-4-5-20251001
+      bedrock:
+        display-name: AWS Bedrock
+        fallback-model: us.anthropic.claude-3-haiku-20240307-v1:0
+        wizard-models:
+          - us.anthropic.claude-3-5-sonnet-20241022-v2:0
+          - us.anthropic.claude-3-haiku-20240307-v1:0
+          - us.meta.llama3-1-70b-instruct-v1:0
+          - amazon.nova-pro-v1:0
+      ollama:
+        display-name: Ollama
+        wizard-models:
+          - llama3
+          - "llama3:70b"
+          - mistral
+          - codellama
+          - gemma2
+```
+
+**Override via environment variables** (Spring Boot relaxed binding):
+
+| What you want | Env var | YAML equivalent |
+|---|---|---|
+| Replace first OpenAI model | `JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_0=gpt-5` | `jaiclaw.models.providers.openai.wizard-models[0]: gpt-5` |
+| Replace entire OpenAI list | `JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_0=gpt-5`<br>`JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_1=gpt-5-mini` | `jaiclaw.models.providers.openai.wizard-models: [gpt-5, gpt-5-mini]` |
+| Change fallback model | `JAICLAW_MODELS_PROVIDERS_OPENAI_FALLBACK_MODEL=gpt-5-mini` | `jaiclaw.models.providers.openai.fallback-model: gpt-5-mini` |
+| Change display name | `JAICLAW_MODELS_PROVIDERS_BEDROCK_DISPLAY_NAME=Amazon Bedrock` | `jaiclaw.models.providers.bedrock.display-name: Amazon Bedrock` |
+| Add a new provider | `JAICLAW_MODELS_PROVIDERS_DEEPSEEK_DISPLAY_NAME=DeepSeek`<br>`JAICLAW_MODELS_PROVIDERS_DEEPSEEK_FALLBACK_MODEL=deepseek-chat`<br>`JAICLAW_MODELS_PROVIDERS_DEEPSEEK_WIZARD_MODELS_0=deepseek-chat`<br>`JAICLAW_MODELS_PROVIDERS_DEEPSEEK_WIZARD_MODELS_1=deepseek-coder` | See below |
+
+**Adding a new provider via YAML** (in `application-local.yml` or `application.yml`):
+
+```yaml
+jaiclaw:
+  models:
+    providers:
+      deepseek:
+        display-name: DeepSeek
+        fallback-model: deepseek-chat
+        wizard-models:
+          - deepseek-chat
+          - deepseek-coder
+```
+
+**Override in Docker Compose** (`.env` file):
+
+```bash
+JAICLAW_MODELS_PROVIDERS_ANTHROPIC_WIZARD_MODELS_0=claude-next
+JAICLAW_MODELS_PROVIDERS_ANTHROPIC_WIZARD_MODELS_1=claude-haiku-next
+JAICLAW_MODELS_PROVIDERS_ANTHROPIC_FALLBACK_MODEL=claude-haiku-next
+```
+
+> **Note:** When any indexed env var is set for a list (e.g., `_WIZARD_MODELS_0`), Spring Boot replaces the entire YAML list with the env-var-defined entries. Always define all list entries when overriding via env vars.
+
 ---
 
 ## Security

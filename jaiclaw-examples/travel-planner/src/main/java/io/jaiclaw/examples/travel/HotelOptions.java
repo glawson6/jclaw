@@ -11,9 +11,9 @@ import java.util.List;
  */
 @JsonClassDescription("Available hotel options for the trip")
 public record HotelOptions(
-        @JsonProperty("options")
-        @JsonPropertyDescription("List of hotel options with price and rating")
-        List<String> options,
+        @JsonProperty("offers")
+        @JsonPropertyDescription("List of hotel offers with details")
+        List<HotelOffer> offers,
 
         @JsonProperty("bestOption")
         @JsonPropertyDescription("Recommended hotel option")
@@ -22,4 +22,28 @@ public record HotelOptions(
         @JsonProperty("estimatedCostPerNight")
         @JsonPropertyDescription("Estimated cost per night in USD")
         double estimatedCostPerNight
-) {}
+) {
+
+    @JsonClassDescription("A single hotel offer")
+    public record HotelOffer(
+            @JsonProperty("name")
+            @JsonPropertyDescription("Hotel name")
+            String name,
+
+            @JsonProperty("stars")
+            @JsonPropertyDescription("Star rating (1-5)")
+            double stars,
+
+            @JsonProperty("pricePerNight")
+            @JsonPropertyDescription("Price per night in USD")
+            double pricePerNight,
+
+            @JsonProperty("address")
+            @JsonPropertyDescription("Hotel address or neighborhood")
+            String address,
+
+            @JsonProperty("reviewScore")
+            @JsonPropertyDescription("Guest review score (0-10)")
+            double reviewScore
+    ) {}
+}

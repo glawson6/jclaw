@@ -1,5 +1,8 @@
 package io.jaiclaw.shell.commands.setup
 
+import io.jaiclaw.config.JaiClawProperties
+import io.jaiclaw.config.ModelsProperties
+import io.jaiclaw.config.ModelsProperties.ModelProviderConfig
 import io.jaiclaw.shell.commands.setup.config.EnvFileWriter
 import io.jaiclaw.shell.commands.setup.config.YamlConfigWriter
 import io.jaiclaw.shell.commands.setup.validation.DiscordTokenValidator
@@ -18,10 +21,24 @@ class OnboardWizardOrchestratorSpec extends Specification {
     DiscordTokenValidator discordValidator = Mock()
     YamlConfigWriter yamlWriter = Mock()
     EnvFileWriter envWriter = Mock()
+    JaiClawProperties jaiClawProperties = JaiClawProperties.builder()
+            .models(new ModelsProperties(Map.of(
+                    "openai", ModelProviderConfig.builder()
+                            .displayName("OpenAI")
+                            .fallbackModel("gpt-4o-mini")
+                            .wizardModels(["gpt-4o", "gpt-4o-mini"])
+                            .build(),
+                    "anthropic", ModelProviderConfig.builder()
+                            .displayName("Anthropic")
+                            .fallbackModel("claude-haiku-4-5-20251001")
+                            .wizardModels(["claude-sonnet-4-6"])
+                            .build()
+            )))
+            .build()
 
     OnboardWizardOrchestrator orchestrator = new OnboardWizardOrchestrator(
             flowBuilder, llmTester, telegramValidator, slackValidator,
-            discordValidator, yamlWriter, envWriter)
+            discordValidator, yamlWriter, envWriter, jaiClawProperties)
 
     def "buildSteps returns all 13 wizard steps"() {
         when:

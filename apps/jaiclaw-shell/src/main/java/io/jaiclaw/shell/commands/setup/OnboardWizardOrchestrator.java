@@ -1,5 +1,6 @@
 package io.jaiclaw.shell.commands.setup;
 
+import io.jaiclaw.config.JaiClawProperties;
 import io.jaiclaw.shell.commands.setup.config.EnvFileWriter;
 import io.jaiclaw.shell.commands.setup.config.YamlConfigWriter;
 import io.jaiclaw.shell.commands.setup.steps.*;
@@ -24,6 +25,7 @@ public class OnboardWizardOrchestrator {
     private final DiscordTokenValidator discordValidator;
     private final YamlConfigWriter yamlWriter;
     private final EnvFileWriter envWriter;
+    private final JaiClawProperties jaiClawProperties;
 
     public OnboardWizardOrchestrator(ComponentFlow.Builder flowBuilder,
                                      LlmConnectivityTester llmTester,
@@ -31,7 +33,8 @@ public class OnboardWizardOrchestrator {
                                      SlackTokenValidator slackValidator,
                                      DiscordTokenValidator discordValidator,
                                      YamlConfigWriter yamlWriter,
-                                     EnvFileWriter envWriter) {
+                                     EnvFileWriter envWriter,
+                                     JaiClawProperties jaiClawProperties) {
         this.flowBuilder = flowBuilder;
         this.llmTester = llmTester;
         this.telegramValidator = telegramValidator;
@@ -39,6 +42,7 @@ public class OnboardWizardOrchestrator {
         this.discordValidator = discordValidator;
         this.yamlWriter = yamlWriter;
         this.envWriter = envWriter;
+        this.jaiClawProperties = jaiClawProperties;
     }
 
     public String run() {
@@ -56,7 +60,7 @@ public class OnboardWizardOrchestrator {
         steps.add(new WelcomeStep(flowBuilder));
         steps.add(new FlowModeStep(flowBuilder));
         steps.add(new ExistingConfigStep(flowBuilder));
-        steps.add(new LlmProviderStep(flowBuilder, llmTester));
+        steps.add(new LlmProviderStep(flowBuilder, llmTester, jaiClawProperties.models()));
 
         // Gateway only in manual mode — deferred check in step itself
         steps.add(new GatewayStep(flowBuilder));

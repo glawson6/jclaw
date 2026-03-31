@@ -237,6 +237,12 @@
             </dependency>
             <dependency>
                 <groupId>io.jaiclaw</groupId>
+                <artifactId>jaiclaw-starter-bedrock</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.jaiclaw</groupId>
                 <artifactId>jaiclaw-starter-gateway</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>

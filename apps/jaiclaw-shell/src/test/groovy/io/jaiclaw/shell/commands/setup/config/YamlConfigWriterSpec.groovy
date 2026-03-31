@@ -1,6 +1,9 @@
 package io.jaiclaw.shell.commands.setup.config
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import io.jaiclaw.config.JaiClawProperties
+import io.jaiclaw.config.ModelsProperties
+import io.jaiclaw.config.ModelsProperties.ModelProviderConfig
 import io.jaiclaw.shell.commands.setup.OnboardResult
 import spock.lang.Specification
 
@@ -8,7 +11,33 @@ import java.nio.file.Path
 
 class YamlConfigWriterSpec extends Specification {
 
-    YamlConfigWriter writer = new YamlConfigWriter()
+    static JaiClawProperties testProperties() {
+        JaiClawProperties.builder()
+                .models(new ModelsProperties(Map.of(
+                        "openai", ModelProviderConfig.builder()
+                                .displayName("OpenAI")
+                                .fallbackModel("gpt-4o-mini")
+                                .wizardModels(["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"])
+                                .build(),
+                        "anthropic", ModelProviderConfig.builder()
+                                .displayName("Anthropic")
+                                .fallbackModel("claude-haiku-4-5-20251001")
+                                .wizardModels(["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"])
+                                .build(),
+                        "bedrock", ModelProviderConfig.builder()
+                                .displayName("AWS Bedrock")
+                                .fallbackModel("us.anthropic.claude-3-haiku-20240307-v1:0")
+                                .wizardModels(["us.anthropic.claude-3-5-sonnet-20241022-v2:0", "us.anthropic.claude-3-haiku-20240307-v1:0"])
+                                .build(),
+                        "ollama", ModelProviderConfig.builder()
+                                .displayName("Ollama")
+                                .wizardModels(["llama3", "mistral"])
+                                .build()
+                )))
+                .build()
+    }
+
+    YamlConfigWriter writer = new YamlConfigWriter(testProperties())
     YAMLMapper mapper = new YAMLMapper()
 
     private Map<String, Object> parse(String yaml) {
@@ -251,5 +280,21 @@ class YamlConfigWriterSpec extends Specification {
         parsed.jaiclaw.'mcp-servers'.'remote-server'.type == "http"
         parsed.jaiclaw.'mcp-servers'.'remote-server'.url == "https://example.com/mcp"
         parsed.jaiclaw.'mcp-servers'.'remote-server'.'auth-token' == '${MCP_REMOTE_SERVER_TOKEN}'
+    }
+
+    def "uses fallback from config for bedrock provider"() {
+        given:
+        def result = new OnboardResult()
+        result.setLlmProvider("bedrock")
+        result.setLlmModel("us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+        result.setAwsRegion("us-east-1")
+        result.setConfigDir(Path.of("/tmp/jaiclaw-test"))
+
+        when:
+        def yaml = writer.generate(result)
+        def parsed = parse(yaml)
+
+        then:
+        parsed.jaiclaw.agent.agents['default'].model.fallbacks == ["us.anthropic.claude-3-haiku-20240307-v1:0"]
     }
 }

@@ -20,6 +20,7 @@
         <module>jaiclaw-starter-openai</module>
         <module>jaiclaw-starter-ollama</module>
         <module>jaiclaw-starter-gemini</module>
+        <module>jaiclaw-starter-bedrock</module>
         <module>jaiclaw-starter-gateway</module>
         <module>jaiclaw-starter-shell</module>
         <module>jaiclaw-starter-embabel</module>

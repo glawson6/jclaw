@@ -1,76 +1,144 @@
 # Travel Planner Example
 
-Multi-step trip planning — an Embabel GOAP agent researches flights and hotels, then assembles a complete itinerary.
+Multi-step trip planning showcasing **both** JaiClaw plugin tools and Embabel GOAP agent actions, backed by a swappable `TravelDataProvider` SPI.
 
 ## What This Demonstrates
 
-- **Embabel GOAP** agent with parallel-capable actions (flights + hotels searched independently)
-- **@Agent** with multiple **@Action** methods chained by type dependencies
-- Domain records as blackboard state (TravelRequest → FlightOptions + HotelOptions → TripPlan)
-- **Browser** module integration (Playwright-based web research, simulated in this example)
-- **Voice** module for speech I/O (optional)
-- LLM structured extraction with `createObject()`
+- **Embabel GOAP agent** with 5 actions (4 data-gathering + 1 assembly) chained by type dependencies
+- **JaiClaw plugin** registering 4 tools (`search_flights`, `search_hotels`, `search_activities`, `get_weather`) via `PluginApi`
+- **`TravelDataProvider` SPI** — interface with two implementations swappable via Spring profiles
+- **`AbstractBuiltinTool` pattern** for structured tool definitions with JSON Schema input
+- **Structured domain records** (`FlightOffer`, `HotelOffer`, `Activity`, `DayForecast`) instead of flat strings
+- **LLM only where it adds value** — data comes from the provider; the LLM assembles the itinerary
 
 ## Architecture
 
-Where this example fits in JaiClaw:
-
 ```
-┌───────────────────────────────────────────────────────────┐
-│                   TRAVEL PLANNER APP                       │
-│                 (standalone Spring Boot)                    │
-├──────────────────┬────────────────────────────────────────┤
-│ Gateway          │  REST API (/api/chat, /api/health)      │
-├──────────────────┼────────────────────────────────────────┤
-│ Voice (optional) │  [jaiclaw-voice] → speech I/O             │
-├──────────────────┼────────────────────────────────────────┤
-│ Orchestration    │  [Embabel GOAP] → parallel actions      │
-│                  │  searchFlights + searchHotels → plan     │
-├──────────────────┼────────────────────────────────────────┤
-│ Browser          │  [jaiclaw-browser] → Playwright research  │
-├──────────────────┼────────────────────────────────────────┤
-│ Core             │  jaiclaw-core (records, SPI)              │
-└──────────────────┴────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                      TRAVEL PLANNER APP                          │
+│                    (standalone Spring Boot)                       │
+├──────────────────┬───────────────────────────────────────────────┤
+│ Gateway          │  REST API (/api/chat, /api/health)            │
+├──────────────────┼───────────────────────────────────────────────┤
+│                  │  ┌─────────────────────────────────────┐      │
+│ Two Entry Points │  │ JaiClaw Tool Loop                   │      │
+│                  │  │  TravelPlannerPlugin → 4 tools      │      │
+│                  │  ├─────────────────────────────────────┤      │
+│                  │  │ Embabel GOAP Agent                  │      │
+│                  │  │  TravelPlannerAgent → 5 actions     │      │
+│                  │  └──────────────┬──────────────────────┘      │
+├──────────────────┼─────────────────┼─────────────────────────────┤
+│ Data Layer       │     TravelDataProvider (SPI)                   │
+│                  │      ├── StubTravelDataProvider (default)      │
+│                  │      └── AmadeusApiTravelDataProvider (live)   │
+├──────────────────┼───────────────────────────────────────────────┤
+│ Domain Records   │  FlightOptions, HotelOptions, ActivityOptions │
+│                  │  WeatherForecast, TravelRequest, TripPlan     │
+└──────────────────┴───────────────────────────────────────────────┘
 
-Data flow:
+Data flow (Embabel GOAP):
   User ──("plan a trip")──► Embabel AgentPlatform
                                   │
-                       ┌──────────┴──────────┐
-                       ▼                     ▼
-                searchFlights          searchHotels
-                  (Browser)              (Browser)
-                       │                     │
-                       ▼                     ▼
-                 FlightOptions         HotelOptions
-                       └──────────┬──────────┘
+                 ┌────────────────┼────────────────┐
+                 ▼                ▼                 ▼
+          searchFlights    searchHotels    searchActivities
+                 │                │                 │
+                 │                │                 ▼
+                 │                │          ActivityOptions
+                 ▼                ▼                 │
+          FlightOptions    HotelOptions    checkWeather
+                 │                │                 │
+                 │                │                 ▼
+                 │                │          WeatherForecast
+                 └────────────────┼────────────────┘
                                   ▼
                               TripPlan
                           (LLM assembles)
+
+Data flow (JaiClaw Tool Loop):
+  User ──("plan a trip")──► LLM ──(tool call)──► search_flights
+                                                  search_hotels
+                                                  search_activities
+                                                  get_weather
+                           ◄──(results)──────────┘
+                           ──(synthesize)──► final response
 ```
+
+Both paths delegate to the same `TravelDataProvider` — the stub returns realistic hardcoded data for Tokyo, Paris, Cancun, and NYC.
 
 ## Prerequisites
 
 - Java 21+
 - JaiClaw built and installed (`./mvnw install -DskipTests` from project root)
-- Anthropic/OpenAI API key (Embabel works best with capable models)
+- Anthropic/OpenAI API key
 
 ## Build & Run
 
+From the project root (`jaiclaw/`):
+
 ```bash
-cd jaiclaw-examples/travel-planner
 export JAVA_HOME=$HOME/.sdkman/candidates/java/21.0.9-oracle
-ANTHROPIC_API_KEY=sk-ant-... ../../mvnw spring-boot:run
+ANTHROPIC_API_KEY=sk-ant-... ./mvnw spring-boot:run -pl :jaiclaw-example-travel-planner
 ```
 
 ## Testing It
 
+### Shell (Interactive)
+
+The travel planner includes a Spring Shell CLI with travel-specific commands:
+
+```
+shell:>chat "what do you do ?"
+I'm Travel Planner, a specialized AI assistant designed to help you plan complete trips!
+
+✈️ Search for flights    🏨 Find hotels
+🎯 Discover activities   🌤️ Check weather forecasts
+📋 Create complete itineraries with cost breakdown and packing lists
+
+shell:>plan-trip Tokyo --origin JFK --departure 2026-05-01 --return-date 2026-05-08 --budget 5000
+
+shell:>flights Tokyo --origin JFK --departure 2026-05-01 --return-date 2026-05-08
+
+shell:>hotels Tokyo --check-in 2026-05-01 --check-out 2026-05-08
+
+shell:>activities Tokyo --start-date 2026-05-01 --end-date 2026-05-08
+
+shell:>weather Tokyo --start-date 2026-05-01 --end-date 2026-05-08
+
+shell:>new-session
+```
+
+The `chat` and `plan-trip` commands use the LLM agent with all travel tools. The direct lookup commands (`flights`, `hotels`, `activities`, `weather`) call the `TravelDataProvider` directly without the LLM.
+
+### REST API
+
 ```bash
-# Plan a trip
+# Plan a trip (stub data, no external API needed)
 curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $(cat ~/.jaiclaw/api-key)" \
-  -d '{"content": "Plan a 5-day trip to Tokyo for 2 people, budget $5000, departing April 15"}'
+  -d '{"content": "Plan a trip to Tokyo for 2 travelers from JFK, departing 2026-05-01, returning 2026-05-08, budget $5000"}'
 
 # Health check
 curl http://localhost:8080/api/health
 ```
+
+## Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `GATEWAY_PORT` | `8080` | Server port |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key (required) |
+| `AI_PROVIDER` | `anthropic` | AI provider (`anthropic`, `openai`, `ollama`) |
+| `SPRING_PROFILES_ACTIVE` | — | Set to `live-api` to use Amadeus API |
+| `TRAVEL_AMADEUS_API_KEY` | — | Amadeus API key (only with `live-api` profile) |
+| `TRAVEL_AMADEUS_API_SECRET` | — | Amadeus API secret (only with `live-api` profile) |
+
+## Extending This Example
+
+To implement a real travel data provider:
+
+1. Create a class implementing `TravelDataProvider`
+2. Register it as a `@Bean` in `TravelPlannerConfiguration` with a `@Profile` annotation
+3. Use `ProxyAwareHttpClientFactory.createWithDefaults()` for HTTP calls (proxy-aware)
+4. See `AmadeusApiTravelDataProvider` for the full pattern including OAuth2 token exchange

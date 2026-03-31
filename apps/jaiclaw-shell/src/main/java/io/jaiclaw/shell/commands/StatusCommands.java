@@ -128,6 +128,10 @@ public class StatusCommands {
                 envConfigured("OPENAI_API_KEY") ? "configured" : "not configured"));
         sb.append("  %-15s %s%n".formatted("Anthropic",
                 envConfigured("ANTHROPIC_API_KEY") ? "configured" : "not configured"));
+        sb.append("  %-15s %s%n".formatted("Gemini",
+                envConfigured("GEMINI_API_KEY") ? "configured" : "not configured"));
+        sb.append("  %-15s %s%n".formatted("AWS Bedrock",
+                envConfigured("AWS_ACCESS_KEY_ID") || envConfigured("AWS_REGION") ? "configured" : "not configured"));
         sb.append("  %-15s %s%n".formatted("Ollama", "configured (localhost:11434)"));
 
         return sb.toString();

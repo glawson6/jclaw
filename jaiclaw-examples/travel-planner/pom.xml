@@ -12,13 +12,21 @@
 
     <artifactId>jaiclaw-example-travel-planner</artifactId>
     <name>JaiClaw :: Examples :: Travel Planner</name>
-    <description>Multi-step trip planning — Embabel GOAP agent researches flights and hotels via browser</description>
+    <description>Multi-step trip planning — Embabel GOAP agent + JaiClaw plugin tools with swappable data providers</description>
 
     <dependencies>
         <dependency>
             <groupId>io.jaiclaw</groupId>
             <artifactId>jaiclaw-starter-embabel</artifactId>
             <type>pom</type>
+        </dependency>
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-plugin-sdk</artifactId>
         </dependency>
         <dependency>
             <groupId>io.jaiclaw</groupId>
@@ -31,6 +39,11 @@
         <dependency>
             <groupId>io.jaiclaw</groupId>
             <artifactId>jaiclaw-gateway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-starter-shell</artifactId>
+            <type>pom</type>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

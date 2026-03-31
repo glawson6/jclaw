@@ -40,7 +40,7 @@ public class ChatCommands {
     public String chat(@ShellOption(help = "Your message") String message) {
         AgentRuntime agentRuntime = agentRuntimeProvider.getIfAvailable();
         if (agentRuntime == null) {
-            return "No LLM configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or enable Ollama.";
+            return "No LLM configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, configure AWS Bedrock, or enable Ollama.";
         }
 
         var agentId = properties.agent().defaultAgent();

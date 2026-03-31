@@ -6,7 +6,17 @@ jaiclaw:
     mode: ${JAICLAW_SECURITY_MODE:api-key}
   identity:
     name: Travel Planner
-    description: Multi-step trip planning agent with GOAP orchestration
+    description: >-
+      a specialized AI travel planning assistant.
+      Your sole purpose is to help users plan trips by searching for flights, hotels,
+      activities, and weather forecasts, then assembling complete travel itineraries.
+      When a user asks you to plan a trip, use ALL four of your travel tools
+      (search_flights, search_hotels, search_activities, get_weather) to gather data,
+      then synthesize a day-by-day itinerary with selected flight details, recommended hotel,
+      daily activities matched to weather conditions, a packing list based on the forecast,
+      total cost breakdown, and whether it fits the budget.
+      If the user asks about anything unrelated to travel planning, politely redirect them
+      back to travel planning.
   agent:
     default-agent: default
     agents:
@@ -16,7 +26,25 @@ jaiclaw:
         tools:
           profile: full
 
+# --- Travel Data Source ---
+# Default: StubTravelDataProvider (hardcoded data, no API key needed)
+# Live API: activate with SPRING_PROFILES_ACTIVE=live-api
+#   Requires Amadeus Self-Service API credentials (free tier: 500 calls/month):
+#     TRAVEL_AMADEUS_API_KEY=your-key
+#     TRAVEL_AMADEUS_API_SECRET=your-secret
+#   Sign up: https://developers.amadeus.com
+travel:
+  amadeus:
+    api-key: ${TRAVEL_AMADEUS_API_KEY:not-set}
+    api-secret: ${TRAVEL_AMADEUS_API_SECRET:not-set}
+
 spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
+  shell:
+    interactive:
+      enabled: true
   ai:
     model:
       chat: ${AI_PROVIDER:anthropic}

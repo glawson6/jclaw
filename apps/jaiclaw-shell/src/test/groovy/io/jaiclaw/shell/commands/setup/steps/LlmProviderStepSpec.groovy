@@ -1,5 +1,7 @@
 package io.jaiclaw.shell.commands.setup.steps
 
+import io.jaiclaw.config.ModelsProperties
+import io.jaiclaw.config.ModelsProperties.ModelProviderConfig
 import io.jaiclaw.shell.commands.setup.OnboardResult
 import io.jaiclaw.shell.commands.setup.validation.LlmConnectivityTester
 import org.springframework.shell.component.flow.ComponentFlow
@@ -9,9 +11,33 @@ import spock.lang.Specification
 
 class LlmProviderStepSpec extends Specification {
 
+    static ModelsProperties testModelsProperties() {
+        new ModelsProperties(Map.of(
+                "openai", ModelProviderConfig.builder()
+                        .displayName("OpenAI")
+                        .fallbackModel("gpt-4o-mini")
+                        .wizardModels(["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"])
+                        .build(),
+                "anthropic", ModelProviderConfig.builder()
+                        .displayName("Anthropic")
+                        .fallbackModel("claude-haiku-4-5-20251001")
+                        .wizardModels(["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"])
+                        .build(),
+                "bedrock", ModelProviderConfig.builder()
+                        .displayName("AWS Bedrock")
+                        .fallbackModel("us.anthropic.claude-3-haiku-20240307-v1:0")
+                        .wizardModels(["us.anthropic.claude-3-5-sonnet-20241022-v2:0", "us.anthropic.claude-3-haiku-20240307-v1:0", "us.meta.llama3-1-70b-instruct-v1:0", "amazon.nova-pro-v1:0"])
+                        .build(),
+                "ollama", ModelProviderConfig.builder()
+                        .displayName("Ollama")
+                        .wizardModels(["llama3", "llama3:70b", "mistral", "codellama", "gemma2"])
+                        .build()
+        ))
+    }
+
     def "name returns LLM Provider"() {
         given:
-        def step = new LlmProviderStep(Mock(ComponentFlow.Builder), Mock(LlmConnectivityTester))
+        def step = new LlmProviderStep(Mock(ComponentFlow.Builder), Mock(LlmConnectivityTester), testModelsProperties())
 
         expect:
         step.name() == "LLM Provider"
@@ -35,7 +61,7 @@ class LlmProviderStepSpec extends Specification {
         flow.run() >> flowResult
         flowResult.getContext() >> context
 
-        def step = new LlmProviderStep(flowBuilder, Mock(LlmConnectivityTester))
+        def step = new LlmProviderStep(flowBuilder, Mock(LlmConnectivityTester), testModelsProperties())
         def result = new OnboardResult()
 
         when:
@@ -49,7 +75,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -103,7 +129,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -156,7 +182,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -196,7 +222,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -246,7 +272,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -294,7 +320,7 @@ class LlmProviderStepSpec extends Specification {
         given:
         def flowBuilder = Mock(ComponentFlow.Builder)
         def llmTester = Mock(LlmConnectivityTester)
-        def step = new LlmProviderStep(flowBuilder, llmTester)
+        def step = new LlmProviderStep(flowBuilder, llmTester, testModelsProperties())
         def result = new OnboardResult()
 
         def providerContext = new BaseComponentContext()
@@ -334,8 +360,8 @@ class LlmProviderStepSpec extends Specification {
         ok
         result.llmModel() == "gpt-4o"
 
-        and: "selectItem called for 3 provider items + 5 openai models"
-        (3 + 5) * selectorSpec.selectItem(_, _) >> selectorSpec
+        and: "selectItem called for 4 provider items + 5 openai models"
+        (4 + 5) * selectorSpec.selectItem(_, _) >> selectorSpec
 
         cleanup:
         System.in = originalIn

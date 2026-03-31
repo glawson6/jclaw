@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import io.jaiclaw.config.JaiClawProperties;
+import io.jaiclaw.config.ModelsProperties.ModelProviderConfig;
 import io.jaiclaw.shell.commands.setup.OnboardResult;
 import io.jaiclaw.shell.commands.setup.OnboardResult.McpServerConfig;
 import io.jaiclaw.shell.commands.setup.OnboardResult.McpTransportType;
@@ -20,6 +22,12 @@ import java.util.Map;
 
 @Component
 public class YamlConfigWriter {
+
+    private final JaiClawProperties jaiClawProperties;
+
+    public YamlConfigWriter(JaiClawProperties jaiClawProperties) {
+        this.jaiClawProperties = jaiClawProperties;
+    }
 
     private static final YAMLMapper MAPPER = YAMLMapper.builder(
             YAMLFactory.builder()
@@ -63,11 +71,11 @@ public class YamlConfigWriter {
         var defaultAgent = new LinkedHashMap<String, Object>();
         var model = new LinkedHashMap<String, Object>();
         model.put("primary", result.llmModel());
-        String fallback = switch (result.llmProvider()) {
-            case "openai" -> "gpt-4o-mini";
-            case "anthropic" -> "claude-haiku-4-5-20251001";
-            default -> null;
-        };
+        String fallback = null;
+        ModelProviderConfig providerConfig = jaiClawProperties.models().providers().get(result.llmProvider());
+        if (providerConfig != null) {
+            fallback = providerConfig.fallbackModel();
+        }
         if (fallback != null) {
             model.put("fallbacks", List.of(fallback));
         }
@@ -187,6 +195,13 @@ public class YamlConfigWriter {
             case "openai" -> ai.put("openai", Map.of("api-key", "${OPENAI_API_KEY}"));
             case "anthropic" -> ai.put("anthropic", Map.of("api-key", "${ANTHROPIC_API_KEY}"));
             case "ollama" -> ai.put("ollama", Map.of("base-url", result.ollamaBaseUrl()));
+            case "bedrock" -> {
+                var converse = new LinkedHashMap<String, Object>();
+                converse.put("enabled", true);
+                var bedrockAws = new LinkedHashMap<String, Object>();
+                bedrockAws.put("region", result.awsRegion());
+                ai.put("bedrock", Map.of("converse", converse, "aws", bedrockAws));
+            }
         }
         return Map.of("ai", ai);
     }

@@ -599,12 +599,13 @@ reconfigure() {
     echo "  2. OpenAI — API key"
     echo "  3. Google Gemini — API key"
     echo "  4. Ollama (local, free)"
+    echo "  5. AWS Bedrock (uses AWS credentials)"
     printf "  ${DIM}── OAuth Providers (browser/device login) ──${NC}\n"
-    echo "  5. Chutes AI (OAuth)"
-    echo "  6. OpenAI Codex (OAuth)"
-    echo "  7. Google Gemini CLI (OAuth)"
-    echo "  8. Qwen Portal (device code)"
-    echo "  9. MiniMax Portal (device code)"
+    echo "  6. Chutes AI (OAuth)"
+    echo "  7. OpenAI Codex (OAuth)"
+    echo "  8. Google Gemini CLI (OAuth)"
+    echo "  9. Qwen Portal (device code)"
+    echo "  10. MiniMax Portal (device code)"
     echo ""
     read -rp "$(printf "${CYAN}▸${NC} Choice [1]: ")" provider_choice
     provider_choice="${provider_choice:-1}"
@@ -657,6 +658,18 @@ reconfigure() {
             ok "Ollama selected — will start with Docker Compose"
             ;;
         5)
+            sed -i.bak "s|^AI_PROVIDER=.*|AI_PROVIDER=bedrock|" "$ENV_FILE"
+            sed -i.bak "s|^BEDROCK_ENABLED=.*|BEDROCK_ENABLED=true|" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+
+            echo ""
+            ask_or_default "AWS region [us-east-1]: " "us-east-1" aws_region
+            sed -i.bak "s|^AWS_REGION=.*|AWS_REGION=${aws_region}|" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+            ok "AWS Bedrock selected (region: ${aws_region})"
+            info "Ensure AWS credentials are configured (env vars, ~/.aws/credentials, or IAM role)"
+            ;;
+        6)
             info "Starting Chutes AI OAuth login..."
             if run_oauth_login "chutes"; then
                 ok "Chutes AI OAuth configured"
@@ -672,7 +685,7 @@ reconfigure() {
                 fi
             fi
             ;;
-        6)
+        7)
             info "Starting OpenAI Codex OAuth login..."
             if run_oauth_login "openai-codex"; then
                 ok "OpenAI Codex OAuth configured"
@@ -680,7 +693,7 @@ reconfigure() {
                 warn "OAuth failed. You can try again later: ./start.sh login openai-codex"
             fi
             ;;
-        7)
+        8)
             info "Starting Google Gemini CLI OAuth login..."
             if run_oauth_login "google-gemini-cli"; then
                 ok "Google Gemini CLI OAuth configured"
@@ -688,7 +701,7 @@ reconfigure() {
                 warn "OAuth failed. You can try again later: ./start.sh login google-gemini-cli"
             fi
             ;;
-        8)
+        9)
             info "Starting Qwen Portal device code login..."
             if run_oauth_login "qwen-portal"; then
                 ok "Qwen Portal OAuth configured"
@@ -696,7 +709,7 @@ reconfigure() {
                 warn "OAuth failed. You can try again later: ./start.sh login qwen-portal"
             fi
             ;;
-        9)
+        10)
             info "Starting MiniMax Portal device code login..."
             if run_oauth_login "minimax-portal"; then
                 ok "MiniMax Portal OAuth configured"
@@ -799,7 +812,7 @@ start_stack() {
     if [ "$configured_provider" = "ollama" ]; then
         # Explicitly configured for Ollama
         use_ollama=true
-    elif [ "$configured_provider" = "anthropic" ] || [ "$configured_provider" = "openai" ] || [ "$configured_provider" = "google-genai" ]; then
+    elif [ "$configured_provider" = "anthropic" ] || [ "$configured_provider" = "openai" ] || [ "$configured_provider" = "google-genai" ] || [ "$configured_provider" = "bedrock" ]; then
         # A cloud provider is configured — skip Ollama
         use_ollama=false
         ok "Provider '$configured_provider' configured — skipping Ollama (you can start it later with: docker compose --profile ollama up -d)"
@@ -1047,7 +1060,7 @@ main() {
             elif [ -n "${GEMINI_API_KEY:-}" ] && [ "${GEMINI_API_KEY}" != "not-set" ]; then
                 ni_provider="google-genai"
             else
-                err "Non-interactive mode requires AI_PROVIDER or an API key env var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY)."
+                err "Non-interactive mode requires AI_PROVIDER or an API key env var (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY) or BEDROCK_ENABLED=true."
                 exit 1
             fi
         fi
@@ -1068,6 +1081,9 @@ main() {
                 ;;
             ollama)
                 sed -i.bak "s|^OLLAMA_ENABLED=.*|OLLAMA_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+                ;;
+            bedrock)
+                sed -i.bak "s|^BEDROCK_ENABLED=.*|BEDROCK_ENABLED=true|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
                 ;;
         esac
         ok "Non-interactive: configured provider '$ni_provider'"

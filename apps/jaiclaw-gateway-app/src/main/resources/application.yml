@@ -33,6 +33,76 @@ jaiclaw:
       - "*"
   plugins:
     enabled: true
+  # --- Wizard model lists & fallback models ---
+  # Override via environment variables (Spring Boot relaxed binding):
+  #
+  # --- Replace a single model in a list ---
+  #   JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_0=gpt-5
+  #   JAICLAW_MODELS_PROVIDERS_ANTHROPIC_WIZARD_MODELS_0=claude-next-gen
+  #
+  # --- Replace the entire list for a provider ---
+  #   JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_0=gpt-5
+  #   JAICLAW_MODELS_PROVIDERS_OPENAI_WIZARD_MODELS_1=gpt-5-mini
+  #   (Spring replaces the full list when any indexed env var is set)
+  #
+  # --- Change the fallback model ---
+  #   JAICLAW_MODELS_PROVIDERS_OPENAI_FALLBACK_MODEL=gpt-5-mini
+  #   JAICLAW_MODELS_PROVIDERS_BEDROCK_FALLBACK_MODEL=us.anthropic.claude-4-haiku-v1:0
+  #
+  # --- Change the display name ---
+  #   JAICLAW_MODELS_PROVIDERS_BEDROCK_DISPLAY_NAME=Amazon Bedrock
+  #
+  # --- Add a new provider not in YAML ---
+  #   JAICLAW_MODELS_PROVIDERS_DEEPSEEK_DISPLAY_NAME=DeepSeek
+  #   JAICLAW_MODELS_PROVIDERS_DEEPSEEK_FALLBACK_MODEL=deepseek-chat
+  #   JAICLAW_MODELS_PROVIDERS_DEEPSEEK_WIZARD_MODELS_0=deepseek-chat
+  #   JAICLAW_MODELS_PROVIDERS_DEEPSEEK_WIZARD_MODELS_1=deepseek-coder
+  #
+  # --- Override in application-local.yml (per-user, loaded via spring.config.import) ---
+  #   jaiclaw:
+  #     models:
+  #       providers:
+  #         openai:
+  #           wizard-models: [gpt-5, gpt-5-mini, gpt-4o]
+  #
+  # --- Override in Docker Compose (.env file) ---
+  #   JAICLAW_MODELS_PROVIDERS_ANTHROPIC_WIZARD_MODELS_0=claude-next
+  #   JAICLAW_MODELS_PROVIDERS_ANTHROPIC_WIZARD_MODELS_1=claude-haiku-next
+  #   JAICLAW_MODELS_PROVIDERS_ANTHROPIC_FALLBACK_MODEL=claude-haiku-next
+  models:
+    providers:
+      openai:
+        display-name: OpenAI
+        fallback-model: gpt-4o-mini
+        wizard-models:
+          - gpt-4o
+          - gpt-4o-mini
+          - gpt-4.1
+          - gpt-4.1-mini
+          - o3-mini
+      anthropic:
+        display-name: Anthropic
+        fallback-model: claude-haiku-4-5-20251001
+        wizard-models:
+          - claude-sonnet-4-6
+          - claude-opus-4-6
+          - claude-haiku-4-5-20251001
+      bedrock:
+        display-name: AWS Bedrock
+        fallback-model: us.anthropic.claude-3-haiku-20240307-v1:0
+        wizard-models:
+          - us.anthropic.claude-3-5-sonnet-20241022-v2:0
+          - us.anthropic.claude-3-haiku-20240307-v1:0
+          - us.meta.llama3-1-70b-instruct-v1:0
+          - amazon.nova-pro-v1:0
+      ollama:
+        display-name: Ollama
+        wizard-models:
+          - llama3
+          - "llama3:70b"
+          - mistral
+          - codellama
+          - gemma2
   mcp-servers:
     cron-manager:
       description: "Scheduled job management"
@@ -107,3 +177,11 @@ spring:
         chat:
           options:
             model: ${GEMINI_MODEL:gemini-2.0-flash}
+    bedrock:
+      converse:
+        enabled: ${BEDROCK_ENABLED:false}
+        chat:
+          options:
+            model: ${BEDROCK_MODEL:us.anthropic.claude-3-5-sonnet-20241022-v2:0}
+      aws:
+        region: ${AWS_REGION:us-east-1}
