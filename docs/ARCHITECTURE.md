@@ -12,99 +12,99 @@ JaiClaw is a Java 21 / Spring Boot 3.5 / Spring AI personal AI assistant framewo
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                          RUNNABLE APPS  (Layer 7)                            │
 │                                                                              │
-│  ┌───────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐  │
-│  │ jaiclaw-gateway-app │  │    jaiclaw-shell   │  │     jaiclaw-examples       │  │
-│  │ REST + WS + Chans │  │ Spring Shell CLI │  │  10 standalone apps      │  │
-│  └────────┬──────────┘  └────────┬─────────┘  └────────────┬─────────────┘  │
+│  ┌───────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐   │
+│  │jaiclaw-gateway-app│  │  jaiclaw-shell   │  │     jaiclaw-examples     │   │
+│  │ REST + WS + Chans │  │ Spring Shell CLI │  │  10 standalone apps      │   │
+│  └────────┬──────────┘  └────────┬─────────┘  └────────────┬─────────────┘   │
 ├───────────┼──────────────────────┼──────────────────────────┼────────────────┤
 │           │            STARTERS  (Layer 6)                  │                │
 │                                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────┐     │
-│  │ starter-gateway  │  │  starter-shell   │  │  starter-anthropic     │     │
-│  │ starter-embabel  │  │ starter-personal │  │  starter-openai        │     │
-│  │                  │  │   -assistant     │  │  starter-gemini        │     │
-│  │                  │  │                  │  │  starter-ollama        │     │
-│  └────────┬─────────┘  └────────┬─────────┘  │  starter-k8s-monitor  │     │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────┐      │
+│  │ starter-gateway  │  │  starter-shell   │  │  starter-anthropic     │      │
+│  │ starter-embabel  │  │ starter-personal │  │  starter-openai        │      │
+│  │                  │  │   -assistant     │  │  starter-gemini        │      │
+│  │                  │  │                  │  │  starter-ollama        │      │
+│  └────────┬─────────┘  └────────┬─────────┘  │  starter-k8s-monitor   │      │
 │           │                     │             └────────────┬───────────┘     │
-├───────────┼─────────────────────┼──────────────────────────┼────────────────┤
-│           │          AUTO-CONFIG  (Layer 5)                 │                │
+├───────────┼─────────────────────┼──────────────────────────┼─────────────────┤
+│           │          AUTO-CONFIG  (Layer 5)                │                 │
 │                                                                              │
-│  ┌────────┴─────────────────────┴──────────────────────────┴─────────────┐  │
-│  │                   jaiclaw-spring-boot-starter                           │  │
-│  │                                                                       │  │
-│  │  Phase 1: JaiClawAutoConfiguration          (core beans)                │  │
-│  │  Phase 2: JaiClawGatewayAutoConfiguration   (gateway + MCP)             │  │
-│  │  Phase 3: JaiClawChannelAutoConfiguration   (channel adapters)          │  │
-│  └────────┬──────────────────────────────────────────────────────────────┘  │
-├───────────┼─────────────────────────────────────────────────────────────────┤
-│           │       GATEWAY + CHANNELS  (Layer 4)                             │
+│  ┌────────┴─────────────────────┴──────────────────────────┴─────────────┐   │
+│  │                   jaiclaw-spring-boot-starter                         │   │
+│  │                                                                       │   │
+│  │  Phase 1: JaiClawAutoConfiguration          (core beans)              │   │
+│  │  Phase 2: JaiClawGatewayAutoConfiguration   (gateway + MCP)           │   │
+│  │  Phase 3: JaiClawChannelAutoConfiguration   (channel adapters)        │   │
+│  └────────┬──────────────────────────────────────────────────────────────┘   │
+├───────────┼──────────────────────────────────────────────────────────────────┤
+│           │       GATEWAY + CHANNELS  (Layer 4)                              │
 │                                                                              │
-│  ┌────────┴──────────────┐  ┌────────────────────────────────────────────┐  │
-│  │    jaiclaw-gateway      │  │            Channel Adapters                │  │
-│  │                       │  │                                            │  │
-│  │  REST API + WebSocket │  │  ┌──────────┐ ┌────────┐ ┌─────────┐     │  │
-│  │  MCP hosting          │  │  │ Telegram │ │ Slack  │ │ Discord │     │  │
-│  │  WebhookDispatcher    │  │  └──────────┘ └────────┘ └─────────┘     │  │
-│  │  Tenant resolution    │  │  ┌──────────┐ ┌────────┐                 │  │
-│  │  Observability        │  │  │  Email   │ │  SMS   │                 │  │
-│  └────────┬──────────────┘  │  └──────────┘ └────────┘                 │  │
-│           │                 └──────────────────────┬─────────────────────┘  │
-├───────────┼────────────────────────────────────────┼────────────────────────┤
-│           │       FEATURE MODULES  (Layer 3)       │                        │
+│  ┌────────┴──────────────┐  ┌────────────────────────────────────────────┐   │
+│  │    jaiclaw-gateway    │  │            Channel Adapters                │   │
+│  │                       │  │                                            │   │
+│  │  REST API + WebSocket │  │  ┌──────────┐ ┌────────┐ ┌─────────┐       │   │
+│  │  MCP hosting          │  │  │ Telegram │ │ Slack  │ │ Discord │       │   │
+│  │  WebhookDispatcher    │  │  └──────────┘ └────────┘ └─────────┘       │   │
+│  │  Tenant resolution    │  │  ┌──────────┐ ┌────────┐                   │   │
+│  │  Observability        │  │  │  Email   │ │  SMS   │                   │   │
+│  └────────┬──────────────┘  │  └──────────┘ └────────┘                   │   │
+│           │                 └──────────────────────┬─────────────────────┘   │
+├───────────┼────────────────────────────────────────┼─────────────────────────┤
+│           │       FEATURE MODULES  (Layer 3)       │                         │
 │                                                                              │
-│  ┌────────┴──────────────────────────────┐  ┌──────┴──────────────────────┐ │
-│  │          jaiclaw-agent                  │  │      jaiclaw-security         │ │
-│  │  AgentRuntime, SessionManager         │  │  JWT auth, TenantResolver   │ │
-│  │  SystemPromptBuilder, JaiClawAgent      │  └─────────────────────────────┘ │
-│  └────────┬──────────────────────────────┘                                  │
+│  ┌────────┴──────────────────────────────┐  ┌──────┴──────────────────────┐  │
+│  │          jaiclaw-agent                │  │      jaiclaw-security       │  │
+│  │  AgentRuntime, SessionManager         │  │  JWT auth, TenantResolver   │  │
+│  │  SystemPromptBuilder, JaiClawAgent    │  └─────────────────────────────┘  │
+│  └────────┬──────────────────────────────┘                                   │
 │           │                                                                  │
-│  ┌────────┴────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────────┐   │
-│  │  jaiclaw-skills   │ │jaiclaw-plugin  │ │ jaiclaw-memory │ │ jaiclaw-config  │   │
-│  │  SkillLoader    │ │  -sdk        │ │ SearchManager│ │ @ConfigProps  │   │
-│  │  versioning     │ │ JaiClawPlugin  │ │ VectorStore  │ │               │   │
-│  └─────────────────┘ │ PluginApi    │ └──────────────┘ └───────────────┘   │
-│                      └──────────────┘                                       │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
-│  │  jaiclaw-docs  │ │ jaiclaw-media  │ │ jaiclaw-audit  │ │jaiclaw-compaction │   │
-│  │  PDF / HTML  │ │ vision/audio │ │ AuditLogger  │ │ context window  │   │
-│  │  parsing     │ │ analysis     │ │              │ │ summarization   │   │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘   │
+│  ┌────────┴────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────────┐     │
+│  │  jaiclaw-skills   │jaiclaw-plugin│ │jaiclaw-memory│ │jaiclaw-config │     │
+│  │  SkillLoader    │ │  -sdk        │ │ SearchManager│ │ @ConfigProps  │     │
+│  │  versioning     │ │ JaiClawPlugin│ │ VectorStore  │ │               │     │
+│  └─────────────────┘ │ PluginApi    │ └──────────────┘ └───────────────┘     │
+│                      └──────────────┘                                        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐     │
+│  │  jaiclaw-docs│ │ jaiclaw-media│ │jaiclaw-audit │ │jaiclaw-compaction│     │
+│  │  PDF / HTML  │ │ vision/audio │ │ AuditLogger  │ │ context window   │     │
+│  │  parsing     │ │ analysis     │ │              │ │ summarization    │     │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘     │
 │                                                                              │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
-│  │jaiclaw-browser │ │ jaiclaw-cron   │ │ jaiclaw-voice  │ │ jaiclaw-identity  │   │
-│  │ Playwright   │ │ scheduler    │ │ TTS / STT    │ │ cross-channel   │   │
-│  │ automation   │ │ virtual thr  │ │              │ │ user linking    │   │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘   │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐     │
+│  │jaiclaw-browser │ jaiclaw-cron │ │ jaiclaw-voice│ │ jaiclaw-identity │     │
+│  │ Playwright   │ │ scheduler    │ │ TTS / STT    │ │ cross-channel    │     │
+│  │ automation   │ │ virtual thr  │ │              │ │ user linking     │     │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘     │
 │                                                                              │
-│  ┌──────────────┐ ┌──────────────┐ ┌────────────────┐                       │
-│  │ jaiclaw-canvas │ │  jaiclaw-code  │ │jaiclaw-messaging │                       │
-│  │ A2UI / HTML  │ │  file edit   │ │ MCP channel    │                       │
-│  │ artifacts    │ │  code tools  │ │ messaging tools│                       │
-│  └──────────────┘ └──────────────┘ └────────────────┘                       │
+│  ┌──────────────┐ ┌──────────────┐ ┌─────────────────┐                       │
+│  │jaiclaw-canvas│ │ jaiclaw-code │ │jaiclaw-messaging│                       │
+│  │ A2UI / HTML  │ │  file edit   │ │ MCP channel     │                       │
+│  │ artifacts    │ │  code tools  │ │ messaging tools │                       │
+│  └──────────────┘ └──────────────┘ └─────────────────┘                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                      TOOL LAYER  (Layer 2)                                   │
 │                                                                              │
-│  ┌──────────────────────────────────────┐  ┌─────────────────────────────┐  │
-│  │           jaiclaw-tools               │  │     jaiclaw-tools-k8s        │  │
-│  │  ToolRegistry, built-in tools       │  │  Fabric8 Kubernetes tools  │  │
-│  │  SpringAiToolBridge, EmbabelBridge  │  └─────────────────────────────┘  │
-│  └────────┬─────────────────────────────┘                                   │
+│  ┌──────────────────────────────────────┐ ┌──────────────────────────────┐   │
+│  │           jaiclaw-tools              │ │     jaiclaw-tools-k8s        │   │
+│  │  ToolRegistry, built-in tools        │ │  Fabric8 Kubernetes tools    │   │
+│  │  SpringAiToolBridge, EmbabelBridge   │ └──────────────────────────────┘   │
+│  └────────┬─────────────────────────────┘                                    │
 ├───────────┼──────────────────────────────────────────────────────────────────┤
-│           │       CHANNEL SPI  (Layer 1)                                    │
+│           │       CHANNEL SPI  (Layer 1)                                     │
 │                                                                              │
-│  ┌────────┴──────────────────────────────────────────────────────────────┐  │
-│  │                      jaiclaw-channel-api                                │  │
-│  │  ChannelAdapter SPI, ChannelMessage, attachments, ChannelRegistry     │  │
-│  └────────┬──────────────────────────────────────────────────────────────┘  │
+│  ┌────────┴──────────────────────────────────────────────────────────────┐   │
+│  │                      jaiclaw-channel-api                              │   │
+│  │  ChannelAdapter SPI, ChannelMessage, attachments, ChannelRegistry     │   │
+│  └────────┬──────────────────────────────────────────────────────────────┘   │
 ├───────────┼──────────────────────────────────────────────────────────────────┤
-│           │       CORE  (Layer 0) — Pure Java, no Spring                    │
+│           │       CORE  (Layer 0) — Pure Java, no Spring                     │
 │                                                                              │
-│  ┌────────┴──────────────────────────────────────────────────────────────┐  │
-│  │                        jaiclaw-core                                     │  │
-│  │  Records: Message, Session, CronJob, ToolResult, DeliveryResult       │  │
-│  │  Sealed interfaces: Message, ToolResult, DeliveryResult               │  │
-│  │  Enums: ToolProfile, PluginKind, HookName                             │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
+│  ┌────────┴──────────────────────────────────────────────────────────────┐   │
+│  │                        jaiclaw-core                                   │   │
+│  │  Records: Message, Session, CronJob, ToolResult, DeliveryResult       │   │
+│  │  Sealed interfaces: Message, ToolResult, DeliveryResult               │   │
+│  │  Enums: ToolProfile, PluginKind, HookName                             │   │
+│  └───────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -165,13 +165,13 @@ One JVM runs everything. The Spring Shell CLI is the user interface.
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                  JVM (Spring Boot)                    │
+│                  JVM (Spring Boot)                   │
 │                                                      │
-│  ┌────────────┐  ┌──────────┐  ┌─────────────────┐  │
-│  │ Spring     │  │ Agent    │  │ Tool Registry   │  │
-│  │ Shell CLI  │→ │ Runtime  │→ │ + Spring AI     │  │
-│  │            │  │          │  │   Tool Bridge   │  │
-│  └────────────┘  └─────┬────┘  └────────┬────────┘  │
+│  ┌────────────┐  ┌──────────┐  ┌─────────────────┐   │
+│  │ Spring     │  │ Agent    │  │ Tool Registry   │   │
+│  │ Shell CLI  │→ │ Runtime  │→ │ + Spring AI     │   │
+│  │            │  │          │  │   Tool Bridge   │   │
+│  └────────────┘  └─────┬────┘  └────────┬────────┘   │
 │                        │                │            │
 │                        ▼                ▼            │
 │                  ┌──────────┐    ┌────────────┐      │
@@ -183,9 +183,9 @@ One JVM runs everything. The Spring Shell CLI is the user interface.
                                           │
                               ┌───────────┼───────────┐
                               ▼           ▼           ▼
-                        ┌──────────┐ ┌────────┐ ┌──────────┐
+                        ┌──────────┐ ┌─────────┐ ┌────────┐ ┌──────────┐
                         │  OpenAI  │ │Anthropic│ │ Gemini │ │  Ollama  │
-                        └──────────┘ └────────┘ └────────┘ └──────────┘
+                        └──────────┘ └─────────┘ └────────┘ └──────────┘
 ```
 
 ### Multi-Process Mode (production / gateway)
@@ -201,13 +201,13 @@ Two deployments: **gateway** (handles all channel I/O) and **app** (handles AI/t
          │            │            │             │            │             │
          ▼            ▼            ▼             ▼            ▼             ▼
     ┌────────────────────────────────────────────────────┐
-    │              JAICLAW GATEWAY (Deployment)            │
+    │              JAICLAW GATEWAY (Deployment)          │
     │              Replicas: 2+, stateless               │
     │                                                    │
     │  ┌──────────────────────────────────────────────┐  │
-    │  │          Channel Adapter Layer                │  │
+    │  │          Channel Adapter Layer               │  │
     │  │                                              │  │
-    │  │  Telegram  Slack  Discord  Email  SMS Adapters│  │
+    │  │ Telegram  Slack  Discord  Email  SMS Adapters│  │
     │  │                                              │  │
     │  │  Each adapter:                               │  │
     │  │  - Receives platform-native inbound message  │  │
@@ -216,14 +216,14 @@ Two deployments: **gateway** (handles all channel I/O) and **app** (handles AI/t
     │  └──────────────────┬───────────────────────────┘  │
     │                     │                              │
     │  ┌──────────────────▼───────────────────────────┐  │
-    │  │           Session Router                      │  │
+    │  │           Session Router                     │  │
     │  │                                              │  │
     │  │  session key = {agentId}:{channel}:{acct}:{peer}│
     │  │  Maps each conversation to an agent session  │  │
     │  └──────────────────┬───────────────────────────┘  │
     │                     │                              │
     │  ┌──────────────────▼───────────────────────────┐  │
-    │  │     REST + WebSocket Control Plane            │  │
+    │  │     REST + WebSocket Control Plane           │  │
     │  │                                              │  │
     │  │  POST /api/chat        - sync message        │  │
     │  │  WS   /ws/session/{id} - streaming           │  │
@@ -233,30 +233,29 @@ Two deployments: **gateway** (handles all channel I/O) and **app** (handles AI/t
                           │
                           ▼
     ┌─────────────────────────────────────────────────────┐
-    │              JAICLAW APP (Deployment)                  │
+    │              JAICLAW APP (Deployment)               │
     │              Replicas: 2+, stateless                │
     │                                                     │
     │  ┌───────────────────────────────────────────────┐  │
-    │  │              Agent Runtime                     │  │
-    │  │  SessionManager + SystemPromptBuilder          │  │
+    │  │              Agent Runtime                    │  │
+    │  │  SessionManager + SystemPromptBuilder         │  │
     │  │  AgentRuntime (orchestrates LLM + tools)      │  │
     │  └───────────────────┬───────────────────────────┘  │
     │                      │                              │
-    │  ┌──────────┐ ┌──────┴─────┐ ┌──────────┐ ┌──────┐│
-    │  │  Tool    │ │  Skill     │ │  Plugin  │ │Memory││
-    │  │ Registry │ │  Loader    │ │ Registry │ │Search││
-    │  └────┬─────┘ └────────────┘ └──────────┘ └──────┘│
-    │       │                                            │
-    │  ┌────▼──────────────────────────────────────────┐ │
-    │  │        Spring AI ChatClient + Tool Bridge     │ │
-    │  └───────────────────┬───────────────────────────┘ │
-    └──────────────────────┼─────────────────────────────┘
-                           │
+    │  ┌──────────┐ ┌──────┴─────┐ ┌──────────┐ ┌──────┐  │
+    │  │  Tool    │ │  Skill     │ │  Plugin  │ │Memory│  │
+    │  │ Registry │ │  Loader    │ │ Registry │ │Search│  │
+    │  └────┬─────┘ └────────────┘ └──────────┘ └──────┘  │
+    │       │                                             │
+    │  ┌────▼──────────────────────────────────────────┐  │
+    │  │        Spring AI ChatClient + Tool Bridge     │  │
+    │  └───────────────────┬───────────────────────────┘  │
+    └──────────────────────┼───────────────────────────── |                        
                ┌───────────┼───────────┐
                ▼           ▼           ▼
-         ┌──────────┐ ┌────────┐ ┌──────────┐
+         ┌──────────┐ ┌──────── ┐ ┌──────────┐
          │  OpenAI  │ │Anthropic│ │  Ollama  │
-         └──────────┘ └────────┘ └──────────┘
+         └──────────┘ └──────── ┘ └──────────┘
 ```
 
 ---
@@ -355,46 +354,46 @@ This ensures session isolation per user per channel per agent.
 Following the taptech-ai-agent-parent patterns (JKube, shared Helm chart, ngrok ingress):
 
 ```
-┌────────────────────────── k8s cluster ──────────────────────────┐
-│                                                                 │
-│  ┌──────────────────────┐     ┌──────────────────────┐         │
-│  │ jaiclaw-gateway        │     │ jaiclaw-app             │         │
-│  │ (Deployment)         │     │ (Deployment)          │         │
-│  │                      │     │                       │         │
-│  │ - webhook receivers  │────▶│ - agent runtime       │         │
-│  │ - WS control plane   │     │ - tools + skills      │         │
-│  │ - channel adapters   │     │ - plugins + memory    │         │
-│  │ - session routing    │     │ - Spring AI clients   │         │
-│  │                      │     │                       │         │
-│  │ Ports: 8080          │     │ Ports: 8081           │         │
-│  │ Replicas: 2+         │     │ Replicas: 2+          │         │
-│  └──────────┬───────────┘     └───────────┬───────────┘         │
-│             │                             │                     │
-│  ┌──────────▼───────────┐                 │                     │
-│  │ ngrok Ingress        │                 │                     │
-│  │ jaiclaw.taptech.net    │                 │                     │
-│  │ (webhooks + WS)      │                 │                     │
-│  └──────────────────────┘                 │                     │
-│                                           │                     │
-│  ┌────────────────────────────────────────┼───────────────────┐ │
-│  │ ConfigMap / Secrets                    │                   │ │
-│  │ - OPENAI_API_KEY                       │                   │ │
-│  │ - ANTHROPIC_API_KEY                    │                   │ │
-│  │ - TELEGRAM_BOT_TOKEN                   │                   │ │
-│  │ - SLACK_BOT_TOKEN + SLACK_SIGNING_SECRET                   │ │
-│  │ - DISCORD_BOT_TOKEN                    │                   │ │
-│  └────────────────────────────────────────┼───────────────────┘ │
-└───────────────────────────────────────────┼─────────────────────┘
-                                            │
-                          ┌─────────────────┼─────────────────┐
-                          ▼                 ▼                 ▼
-                  ┌──────────────┐  ┌────────────┐  ┌──────────────┐
-                  │    Redis     │  │   Ollama   │  │    Kafka     │
-                  │  (sessions)  │  │ (local LLM)│  │  (events)    │
-                  │              │  │            │  │  (optional)  │
-                  │  bare-metal  │  │ bare-metal │  │  bare-metal  │
-                  │ 10.92.7.164  │  │ 10.92.7.164│  │ 10.92.7.164 │
-                  └──────────────┘  └────────────┘  └──────────────┘
+┌──────────────────────────── k8s cluster ────────────────────────────┐
+│                                                                     │
+│  ┌───────────────────────┐     ┌───────────────────────┐           │
+│  │ jaiclaw-gateway       │     │ jaiclaw-app           │           │
+│  │ (Deployment)          │     │ (Deployment)          │           │
+│  │                       │     │                       │           │
+│  │ - webhook receivers   │────▶│ - agent runtime       │           │
+│  │ - WS control plane    │     │ - tools + skills      │           │
+│  │ - channel adapters    │     │ - plugins + memory    │           │
+│  │ - session routing     │     │ - Spring AI clients   │           │
+│  │                       │     │                       │           │
+│  │ Ports: 8080           │     │ Ports: 8081           │           │
+│  │ Replicas: 2+          │     │ Replicas: 2+          │           │
+│  └───────────┬───────────┘     └───────────┬───────────┘           │
+│              │                             │                       │
+│  ┌───────────▼───────────┐                 │                       │
+│  │ ngrok Ingress         │                 │                       │
+│  │ jaiclaw.taptech.net   │                 │                       │
+│  │ (webhooks + WS)       │                 │                       │
+│  └───────────────────────┘                 │                       │
+│                                            │                       │
+│  ┌─────────────────────────────────────────┼─────────────────────┐ │
+│  │ ConfigMap / Secrets                     │                     │ │
+│  │ - OPENAI_API_KEY                        │                     │ │
+│  │ - ANTHROPIC_API_KEY                     │                     │ │
+│  │ - TELEGRAM_BOT_TOKEN                    │                     │ │
+│  │ - SLACK_BOT_TOKEN + SLACK_SIGNING_SECRET│                     │ │
+│  │ - DISCORD_BOT_TOKEN                     │                     │ │
+│  └─────────────────────────────────────────┼─────────────────────┘ │
+└────────────────────────────────────────────┼───────────────────────┘
+                                             │
+                           ┌─────────────────┼─────────────────┐
+                           ▼                 ▼                 ▼
+                   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+                   │    Redis     │  │    Ollama    │  │    Kafka     │
+                   │  (sessions)  │  │  (local LLM) │  │   (events)   │
+                   │              │  │              │  │  (optional)  │
+                   │  bare-metal  │  │  bare-metal  │  │  bare-metal  │
+                   │ 10.92.7.164  │  │ 10.92.7.164  │  │ 10.92.7.164  │
+                   └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 ### Docker Image Build
