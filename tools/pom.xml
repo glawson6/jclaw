@@ -18,5 +18,6 @@
         <module>jaiclaw-perplexity</module>
         <module>jaiclaw-rest-cli-architect</module>
         <module>jaiclaw-skill-creator</module>
+        <module>jaiclaw-prompt-analyzer</module>
     </modules>
 </project>

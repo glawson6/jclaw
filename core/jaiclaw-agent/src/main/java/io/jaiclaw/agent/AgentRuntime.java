@@ -348,7 +348,7 @@ public class AgentRuntime {
             tokenUsage = ExplicitToolLoop.extractUsage(chatResponse);
 
             LlmTraceLogger.logRequest(systemPrompt, new ArrayList<>(historyMessages),
-                    userInput, tokenUsage.inputTokens());
+                    userInput, springTools, tokenUsage.inputTokens());
             LlmTraceLogger.logResponse(responseContent, tokenUsage.outputTokens());
         }
 

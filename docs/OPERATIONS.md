@@ -685,6 +685,155 @@ SPRING_PROFILES_ACTIVE=security-hardened ./start.sh local
 
 ---
 
+## Skills Configuration
+
+JaiClaw ships with a library of bundled skills — Markdown-based behavioral instructions loaded into the LLM's system prompt. By default, **all bundled skills are loaded** (`jaiclaw.skills.allow-bundled: ["*"]`).
+
+### The Problem: Token Bloat
+
+The bundled skill library contains 59 skills totaling ~160KB of text. On a typical developer machine, roughly 27 pass platform eligibility checks and are injected verbatim into the system prompt on every LLM request. This adds **~26,000 tokens** of context that may be entirely irrelevant to your application.
+
+**Side effects of not configuring skills:**
+
+| Impact | Description |
+|--------|-------------|
+| **Cost** | ~26,000 extra input tokens per request. At typical API pricing ($3/M input tokens), this adds ~$0.08 per request — a 60x increase for a simple query that would otherwise use ~500 tokens. |
+| **Latency** | More input tokens means longer time-to-first-token. The LLM must process all skill content before generating a response. |
+| **Quality** | Irrelevant skills (e.g., kubectl commands injected into a travel planner) can confuse the model and degrade response quality. The model may attempt to use skills that have nothing to do with the task. |
+| **Context window** | Skill content consumes context window capacity that could be used for conversation history, tool results, or user content. Long conversations will hit compaction thresholds sooner. |
+
+### Configuration
+
+```yaml
+jaiclaw:
+  skills:
+    # Default — loads ALL bundled skills (dangerous for production)
+    allow-bundled: ["*"]
+
+    # Recommended — disable all bundled skills for focused applications
+    allow-bundled: []
+
+    # Selective — whitelist only the skills you need
+    allow-bundled:
+      - conversation
+      - web-research
+      - summarize
+
+    # Watch workspace for custom SKILL.md files (default: true)
+    watch-workspace: true
+
+    # Directory for custom workspace skills
+    workspace-dir: /path/to/skills
+```
+
+### Recommendations
+
+- **Custom applications and examples**: Set `allow-bundled: []` and rely on your own tools and plugins. Bundled skills are designed for the general-purpose JaiClaw shell, not specialized apps.
+- **General-purpose shell**: The default `["*"]` is appropriate — the shell benefits from coding, system admin, and web research skills.
+- **Production deployments**: Always whitelist specific skills. Never deploy with `["*"]` unless you have verified the token impact and are comfortable with the cost.
+
+### Diagnosing Token Bloat
+
+If you see unexpectedly high input token counts in the `AgentRuntime` INFO log, check your skills configuration:
+
+```bash
+# Check how many skills are loaded
+jaiclaw> skills
+
+# Check token usage per request
+# (logged automatically at INFO level)
+INFO AgentRuntime - LLM usage — request: 32,951 tokens, response: 133 tokens, total: 33,084 tokens
+# ^^^ 33K input tokens for a simple query = bundled skills are loaded
+```
+
+### Pre-Flight Token Check (prompt-analyzer)
+
+Use the `jaiclaw-prompt-analyzer` CLI tool to estimate token usage **before running the app**:
+
+```bash
+# Build the standalone analyzer
+./mvnw package -pl :jaiclaw-prompt-analyzer -Pstandalone -DskipTests
+
+# Analyze a project
+java -jar tools/jaiclaw-prompt-analyzer/target/jaiclaw-prompt-analyzer-*.jar \
+  prompt-analyze --path /path/to/my-app
+
+# CI gate — fail if estimated tokens exceed threshold
+java -jar tools/jaiclaw-prompt-analyzer/target/jaiclaw-prompt-analyzer-*.jar \
+  prompt-check --path /path/to/my-app --threshold 5000
+```
+
+The analyzer scans `application.yml`, resolves skills and tools, and produces a per-component token breakdown. It catches common misconfigurations like missing `allow-bundled` (which defaults to loading all ~59 skills at ~26K tokens).
+
+See [CLI Tools Reference](../../../dev/docs/jaiclaw/dev-guide/cli-tools.md#jaiclaw-prompt-analyzer) for full documentation.
+
+See [Token Usage Logging](#token-usage-logging) for how to enable detailed request/response tracing.
+
+---
+
+## Token Usage Logging
+
+JaiClaw logs token usage after every LLM call. Two loggers provide different levels of detail:
+
+### INFO: Token Count Summary (default: on)
+
+Logger: `io.jaiclaw.agent.AgentRuntime`
+
+```
+INFO  AgentRuntime - LLM usage — request: 1,247 tokens, response: 583 tokens, total: 1,830 tokens
+INFO  AgentRuntime - LLM cache — read: 1,024 tokens, write: 223 tokens
+```
+
+The cache line only appears when values are non-zero (Anthropic prompt caching).
+
+### TRACE: Full Request/Response Content (default: off)
+
+Logger: `io.jaiclaw.agent.LlmTraceLogger`
+
+When enabled, logs the full LLM request broken down into three components — system prompt, tools, and conversation — each with an estimated token count (~chars/4). The provider's actual total is shown for comparison.
+
+```
+TRACE LlmTraceLogger - LLM request — system prompt (~148 tokens):
+You are Travel Planner, a specialized AI travel planning assistant...
+
+TRACE LlmTraceLogger - LLM request — tools (4 tools, ~1,872 tokens):
+search_flights: Search for flights between cities
+  schema: {"type":"object","properties":{"origin":{"type":"string"},...}}
+search_hotels: Search for hotel accommodations
+  schema: {"type":"object","properties":{"destination":{"type":"string"},...}}
+...
+
+TRACE LlmTraceLogger - LLM request — conversation (~5 tokens):
+[user] hello
+
+TRACE LlmTraceLogger - LLM request — token breakdown: system ~148 + tools ~1,872 + conversation ~5 = ~2,025 estimated, provider total: 2,317
+
+TRACE LlmTraceLogger - LLM response (133 tokens):
+I'm Travel Planner, a specialized AI assistant designed to help you plan trips!
+```
+
+The estimated counts are approximations (~chars/4). The provider total includes API framing overhead not captured in the estimate. The gap between the estimate and provider total is typically 10-15% and accounts for tokenizer differences and protocol overhead.
+
+### Configuration
+
+```yaml
+logging:
+  level:
+    # Token count summary (default: INFO = on, set WARN to disable)
+    io.jaiclaw.agent.AgentRuntime: INFO
+
+    # Full request/response content (default: WARN = off, set TRACE to enable)
+    io.jaiclaw.agent.LlmTraceLogger: WARN
+```
+
+The two loggers are independent — you can have token summaries without full content, or both.
+
+### Token Usage in AssistantMessage
+
+Token usage is also recorded on each `AssistantMessage` in the session via the `usage` field (`TokenUsage` record with `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`). This is available programmatically for billing, analytics, or rate limiting.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |

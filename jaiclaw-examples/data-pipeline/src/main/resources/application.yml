@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT:8080}
 
 jaiclaw:
+  skills:
+    allow-bundled: []
   identity:
     name: Data Pipeline Orchestrator
     description: ETL pipeline management agent with audit trail and approval gates

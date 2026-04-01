@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT:8080}
 
 jaiclaw:
+  skills:
+    allow-bundled: []
   identity:
     name: Research Assistant
     description: Multi-source research agent with context compaction and workspace memory

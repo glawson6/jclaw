@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT:8080}
 
 jaiclaw:
+  skills:
+    allow-bundled: []
   identity:
     name: Code Scaffolder
     description: Project scaffolding agent with streaming output and prompt customization

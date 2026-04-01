@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT:8080}
 
 jaiclaw:
+  skills:
+    allow-bundled: []
   identity:
     name: Incident Responder
     description: DevOps incident triage and remediation agent

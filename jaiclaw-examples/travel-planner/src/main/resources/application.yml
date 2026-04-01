@@ -45,7 +45,7 @@ logging:
     # Token usage summary (INFO = on, WARN = off)
     io.jaiclaw.agent.AgentRuntime: INFO
     # Full LLM request/response content (off by default, set to TRACE to enable)
-    io.jaiclaw.agent.LlmTraceLogger: WARN
+    io.jaiclaw.agent.LlmTraceLogger: TRACE
 
 spring:
   autoconfigure:

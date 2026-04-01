@@ -72,7 +72,7 @@ public class ExplicitToolLoop {
             accumulatedUsage = accumulatedUsage.add(iterationUsage);
 
             LlmTraceLogger.logIteration(i + 1, messages, output.getText(),
-                    iterationUsage.inputTokens(), iterationUsage.outputTokens());
+                    toolsByName.values(), iterationUsage.inputTokens(), iterationUsage.outputTokens());
 
             if (output.getToolCalls() == null || output.getToolCalls().isEmpty()) {
                 return new LoopResult(output.getText(), toolCallHistory, i + 1, accumulatedUsage);

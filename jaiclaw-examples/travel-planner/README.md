@@ -134,6 +134,60 @@ curl http://localhost:8080/api/health
 | `TRAVEL_AMADEUS_API_KEY` | — | Amadeus API key (only with `live-api` profile) |
 | `TRAVEL_AMADEUS_API_SECRET` | — | Amadeus API secret (only with `live-api` profile) |
 
+### Bundled Skills
+
+By default, JaiClaw loads **all bundled skills** into the system prompt (`jaiclaw.skills.allow-bundled: ["*"]`). The bundled skill library includes 59 skills totaling ~160KB of text. On a typical developer machine, roughly 27 pass eligibility checks and are injected verbatim into every LLM request — adding ~26,000 tokens of irrelevant context.
+
+**This travel planner disables all bundled skills** because it only needs its 4 custom travel tools:
+
+```yaml
+jaiclaw:
+  skills:
+    allow-bundled: []    # no bundled skills — travel planner uses its own tools
+```
+
+Without this setting, a simple "plan a trip to Tokyo" request would consume ~33,000 input tokens (mostly skill content about git, kubectl, shell commands, etc.) instead of ~500. At typical API pricing, that is a **60x cost increase per request** with no benefit.
+
+**If you build your own example or application**, always configure `allow-bundled` explicitly:
+
+```yaml
+jaiclaw:
+  skills:
+    # Option 1: disable all bundled skills
+    allow-bundled: []
+
+    # Option 2: whitelist only the skills you need
+    allow-bundled:
+      - conversation
+      - web-research
+```
+
+See the [Skills Configuration](../../docs/OPERATIONS.md#skills-configuration) section in the Operations Guide for the full reference.
+
+### Token Usage Logging
+
+The travel planner includes logging configuration to monitor LLM token consumption:
+
+```yaml
+logging:
+  level:
+    # Token count summary after every LLM call (INFO = on, WARN = off)
+    io.jaiclaw.agent.AgentRuntime: INFO
+
+    # Full LLM request/response content (TRACE = on, WARN = off by default)
+    io.jaiclaw.agent.LlmTraceLogger: WARN
+```
+
+With `AgentRuntime` at INFO, each LLM call logs:
+
+```
+INFO  AgentRuntime - LLM usage — request: 487 tokens, response: 583 tokens, total: 1,070 tokens
+```
+
+If you see unexpectedly high request token counts (e.g., 30,000+ for a simple query), check your `allow-bundled` configuration — all bundled skills are probably being loaded.
+
+To debug what is being sent to the LLM, temporarily set `io.jaiclaw.agent.LlmTraceLogger: TRACE` to see the full system prompt and message history.
+
 ## Extending This Example
 
 To implement a real travel data provider:
