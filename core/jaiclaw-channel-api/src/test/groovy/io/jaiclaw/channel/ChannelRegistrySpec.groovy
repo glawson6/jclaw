@@ -113,6 +113,49 @@ class ChannelRegistrySpec extends Specification {
         1 * good.start(handler)
     }
 
+    def "isStateless returns false by default"() {
+        given:
+        registry.register(mockAdapter("telegram"))
+
+        expect:
+        !registry.isStateless("telegram")
+        !registry.isStateless("unknown")
+    }
+
+    def "isStateless returns true when markStateless called"() {
+        given:
+        registry.register(mockAdapter("batch"))
+        registry.markStateless("batch")
+
+        expect:
+        registry.isStateless("batch")
+    }
+
+    def "isStateless returns true when adapter reports stateless"() {
+        given:
+        def adapter = Mock(ChannelAdapter)
+        adapter.channelId() >> "camel-pipe"
+        adapter.displayName() >> "Camel Pipe"
+        adapter.isStateless() >> true
+        registry.register(adapter)
+
+        expect:
+        registry.isStateless("camel-pipe")
+    }
+
+    def "isStateless prefers markStateless over adapter"() {
+        given:
+        def adapter = Mock(ChannelAdapter)
+        adapter.channelId() >> "hybrid"
+        adapter.displayName() >> "Hybrid"
+        adapter.isStateless() >> false
+        registry.register(adapter)
+        registry.markStateless("hybrid")
+
+        expect:
+        registry.isStateless("hybrid")
+    }
+
     private ChannelAdapter mockAdapter(String id) {
         def adapter = Mock(ChannelAdapter)
         adapter.channelId() >> id

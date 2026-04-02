@@ -5,6 +5,8 @@ package io.jaiclaw.core.tool;
  * Modeled after OpenClaw's ToolProfileId system.
  */
 public enum ToolProfile {
+    /** No tools — pure conversation, no tool access */
+    NONE,
     /** Minimal tools — read-only, no execution */
     MINIMAL,
     /** Coding tools — file read/write/edit, shell execution */

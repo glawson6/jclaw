@@ -39,4 +39,14 @@ public interface ChannelAdapter {
     default boolean supportsStreaming() {
         return false;
     }
+
+    /**
+     * Whether this channel is stateless — each inbound message gets a fresh,
+     * ephemeral session with no history and no persistence. Useful for batch
+     * processing channels (file pipelines, webhook ingestion) where each
+     * message is an independent interaction.
+     */
+    default boolean isStateless() {
+        return false;
+    }
 }

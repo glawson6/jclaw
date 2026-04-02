@@ -19,6 +19,8 @@ import io.jaiclaw.gateway.tenant.TenantResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.jaiclaw.core.model.Session;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -145,7 +147,14 @@ public class GatewayService implements ChannelMessageHandler {
                 tenantConfig = tenantAgentConfigService.resolve(tenantId);
             }
 
-            var session = sessionManager.getOrCreate(sessionKey, defaultAgentId);
+            boolean stateless = channelRegistry.isStateless(message.channelId());
+            Session session;
+            if (stateless) {
+                String tid = tenant.map(TenantContext::getTenantId).orElse(null);
+                session = Session.create(UUID.randomUUID().toString(), sessionKey, defaultAgentId, tid);
+            } else {
+                session = sessionManager.getOrCreate(sessionKey, defaultAgentId);
+            }
             ToolProfile toolProfile = ToolProfileHolder.getOrDefault();
 
             // Build identity from tenant config or use default
@@ -159,7 +168,7 @@ public class GatewayService implements ChannelMessageHandler {
             String agentId = tenantConfig != null ? tenantConfig.agentId() : defaultAgentId;
 
             AgentRuntimeContext context = new AgentRuntimeContext(
-                    agentId, sessionKey, session, identity, toolProfile, ".", tenantConfig);
+                    agentId, sessionKey, session, identity, toolProfile, ".", tenantConfig, stateless);
 
             agentRuntime.run(message.content(), context)
                     .thenAccept(response -> deliverResponse(message, response))

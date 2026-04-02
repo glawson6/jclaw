@@ -15,6 +15,7 @@ public class ChannelRegistry {
     private static final Logger log = LoggerFactory.getLogger(ChannelRegistry.class);
 
     private final Map<String, ChannelAdapter> adapters = new ConcurrentHashMap<>();
+    private final Set<String> statelessChannels = ConcurrentHashMap.newKeySet();
 
     public void register(ChannelAdapter adapter) {
         var previous = adapters.putIfAbsent(adapter.channelId(), adapter);
@@ -50,6 +51,30 @@ public class ChannelRegistry {
         if (adapter != null && adapter.isRunning()) {
             adapter.stop();
         }
+    }
+
+    /**
+     * Mark a channel as stateless via configuration (property-driven).
+     * Stateless channels create ephemeral sessions with no history persistence.
+     */
+    public void markStateless(String channelId) {
+        statelessChannels.add(channelId);
+        log.info("Marked channel as stateless: {}", channelId);
+    }
+
+    /**
+     * Check whether a channel is stateless. Returns true if either:
+     * <ul>
+     *   <li>The channel was marked stateless via {@link #markStateless(String)}</li>
+     *   <li>The adapter's {@link ChannelAdapter#isStateless()} returns true</li>
+     * </ul>
+     */
+    public boolean isStateless(String channelId) {
+        if (statelessChannels.contains(channelId)) {
+            return true;
+        }
+        ChannelAdapter adapter = adapters.get(channelId);
+        return adapter != null && adapter.isStateless();
     }
 
     /**

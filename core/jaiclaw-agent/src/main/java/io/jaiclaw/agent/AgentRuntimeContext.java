@@ -15,6 +15,7 @@ import io.jaiclaw.core.tool.ToolProfile;
  * @param toolProfile  tool profile for tool filtering
  * @param workspaceDir workspace directory for memory loading
  * @param tenantConfig per-tenant agent configuration (nullable — null means use singleton path)
+ * @param stateless    when true, session history is not persisted (ephemeral execution)
  */
 public record AgentRuntimeContext(
         String agentId,
@@ -23,21 +24,31 @@ public record AgentRuntimeContext(
         AgentIdentity identity,
         ToolProfile toolProfile,
         String workspaceDir,
-        TenantAgentConfig tenantConfig
+        TenantAgentConfig tenantConfig,
+        boolean stateless
 ) {
+    /**
+     * Backward-compatible constructor without stateless.
+     */
+    public AgentRuntimeContext(String agentId, String sessionKey, Session session,
+                               AgentIdentity identity, ToolProfile toolProfile,
+                               String workspaceDir, TenantAgentConfig tenantConfig) {
+        this(agentId, sessionKey, session, identity, toolProfile, workspaceDir, tenantConfig, false);
+    }
+
     /**
      * Backward-compatible constructor without tenantConfig.
      */
     public AgentRuntimeContext(String agentId, String sessionKey, Session session,
                                AgentIdentity identity, ToolProfile toolProfile, String workspaceDir) {
-        this(agentId, sessionKey, session, identity, toolProfile, workspaceDir, null);
+        this(agentId, sessionKey, session, identity, toolProfile, workspaceDir, null, false);
     }
 
     /**
      * Minimal backward-compatible constructor.
      */
     public AgentRuntimeContext(String agentId, String sessionKey, Session session) {
-        this(agentId, sessionKey, session, AgentIdentity.DEFAULT, ToolProfile.FULL, ".", null);
+        this(agentId, sessionKey, session, AgentIdentity.DEFAULT, ToolProfile.FULL, ".", null, false);
     }
 
     public static Builder builder() { return new Builder(); }
@@ -50,6 +61,7 @@ public record AgentRuntimeContext(
         private ToolProfile toolProfile;
         private String workspaceDir;
         private TenantAgentConfig tenantConfig;
+        private boolean stateless;
 
         public Builder agentId(String agentId) { this.agentId = agentId; return this; }
         public Builder sessionKey(String sessionKey) { this.sessionKey = sessionKey; return this; }
@@ -58,10 +70,12 @@ public record AgentRuntimeContext(
         public Builder toolProfile(ToolProfile toolProfile) { this.toolProfile = toolProfile; return this; }
         public Builder workspaceDir(String workspaceDir) { this.workspaceDir = workspaceDir; return this; }
         public Builder tenantConfig(TenantAgentConfig tenantConfig) { this.tenantConfig = tenantConfig; return this; }
+        public Builder stateless(boolean stateless) { this.stateless = stateless; return this; }
 
         public AgentRuntimeContext build() {
             return new AgentRuntimeContext(
-                    agentId, sessionKey, session, identity, toolProfile, workspaceDir, tenantConfig);
+                    agentId, sessionKey, session, identity, toolProfile,
+                    workspaceDir, tenantConfig, stateless);
         }
     }
 }

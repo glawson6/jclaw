@@ -126,6 +126,53 @@ class GatewayServiceSpec extends Specification {
         noExceptionThrown()
     }
 
+    def "onMessage creates ephemeral session for stateless channel"() {
+        given:
+        def adapter = Mock(ChannelAdapter)
+        adapter.channelId() >> "batch"
+        adapter.displayName() >> "Batch"
+        adapter.isStateless() >> true
+        adapter.sendMessage(_) >> new DeliveryResult.Success("msg_1")
+        channelRegistry.register(adapter)
+
+        def response = new AssistantMessage("resp1", "Processed!", "model")
+        agentRuntime.run(_, { AgentRuntimeContext ctx ->
+            ctx.stateless() == true
+        }) >> CompletableFuture.completedFuture(response)
+
+        def msg = ChannelMessage.inbound("id1", "batch", "bot", "peer", "data", Map.of())
+
+        when:
+        gateway.onMessage(msg)
+        Thread.sleep(100)
+
+        then: "sessionManager.getOrCreate is NOT called — ephemeral session used"
+        0 * sessionManager.getOrCreate(_, _)
+        1 * adapter.sendMessage({ it.content() == "Processed!" })
+    }
+
+    def "onMessage creates ephemeral session for markStateless channel"() {
+        given:
+        def adapter = Mock(ChannelAdapter)
+        adapter.channelId() >> "webhook"
+        adapter.displayName() >> "Webhook"
+        adapter.sendMessage(_) >> new DeliveryResult.Success("msg_1")
+        channelRegistry.register(adapter)
+        channelRegistry.markStateless("webhook")
+
+        def response = new AssistantMessage("resp1", "Done!", "model")
+        agentRuntime.run(_, _) >> CompletableFuture.completedFuture(response)
+
+        def msg = ChannelMessage.inbound("id1", "webhook", "bot", "peer", "data", Map.of())
+
+        when:
+        gateway.onMessage(msg)
+        Thread.sleep(100)
+
+        then: "sessionManager.getOrCreate is NOT called"
+        0 * sessionManager.getOrCreate(_, _)
+    }
+
     def "start and stop delegate to channel registry"() {
         given:
         def adapter = Mock(ChannelAdapter)

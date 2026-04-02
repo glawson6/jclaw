@@ -8,6 +8,7 @@ import io.jaiclaw.agent.loop.ExplicitToolLoop;
 import io.jaiclaw.agent.session.SessionManager;
 import io.jaiclaw.agent.tenant.TenantAgentExecutionContext;
 import io.jaiclaw.agent.tenant.TenantAgentRuntimeFactory;
+import io.jaiclaw.config.AgentProperties;
 import io.jaiclaw.config.TenantAgentConfig;
 import io.jaiclaw.core.agent.*;
 import io.jaiclaw.core.hook.HookName;
@@ -17,6 +18,7 @@ import io.jaiclaw.core.model.UserMessage;
 import io.jaiclaw.core.skill.SkillDefinition;
 import io.jaiclaw.core.tool.ToolCallback;
 import io.jaiclaw.core.tool.ToolContext;
+import io.jaiclaw.core.tool.ToolProfile;
 import io.jaiclaw.tools.ToolRegistry;
 import io.jaiclaw.tools.bridge.SpringAiToolBridge;
 import io.jaiclaw.tools.bridge.embabel.AgentOrchestrationPort;
@@ -59,6 +61,11 @@ public class AgentRuntime {
     private final MemoryProvider memoryProvider;
     private final ToolApprovalHandler approvalHandler;
     private final AgentOrchestrationPort orchestrationPort;
+    private final String defaultAdditionalInstructions;
+    private final boolean replaceSystemPrompt;
+
+    // Deployment-time tool policy from YAML (profile + allow/deny)
+    private final AgentProperties.ToolPolicyConfig defaultToolPolicy;
 
     // Per-tenant support (nullable — null means singleton path)
     private final TenantAgentRuntimeFactory tenantRuntimeFactory;
@@ -84,7 +91,10 @@ public class AgentRuntime {
             AgentOrchestrationPort orchestrationPort,
             TenantAgentRuntimeFactory tenantRuntimeFactory,
             AgentLoopDelegateRegistry delegateRegistry,
-            TenantGuard tenantGuard) {
+            TenantGuard tenantGuard,
+            String defaultAdditionalInstructions,
+            boolean replaceSystemPrompt,
+            AgentProperties.ToolPolicyConfig defaultToolPolicy) {
         this.sessionManager = sessionManager;
         this.chatClientBuilder = chatClientBuilder;
         this.toolRegistry = toolRegistry;
@@ -99,6 +109,33 @@ public class AgentRuntime {
         this.tenantRuntimeFactory = tenantRuntimeFactory;
         this.delegateRegistry = delegateRegistry;
         this.tenantGuard = tenantGuard;
+        this.defaultAdditionalInstructions = defaultAdditionalInstructions != null ? defaultAdditionalInstructions : "";
+        this.replaceSystemPrompt = replaceSystemPrompt;
+        this.defaultToolPolicy = defaultToolPolicy != null ? defaultToolPolicy : AgentProperties.ToolPolicyConfig.DEFAULT;
+    }
+
+    /**
+     * Backward-compatible full constructor without additional instructions.
+     */
+    public AgentRuntime(
+            SessionManager sessionManager,
+            ChatClient.Builder chatClientBuilder,
+            ToolRegistry toolRegistry,
+            List<SkillDefinition> skills,
+            ChatModel chatModel,
+            ToolLoopConfig toolLoopConfig,
+            ContextCompactor compactor,
+            AgentHookDispatcher hooks,
+            MemoryProvider memoryProvider,
+            ToolApprovalHandler approvalHandler,
+            AgentOrchestrationPort orchestrationPort,
+            TenantAgentRuntimeFactory tenantRuntimeFactory,
+            AgentLoopDelegateRegistry delegateRegistry,
+            TenantGuard tenantGuard) {
+        this(sessionManager, chatClientBuilder, toolRegistry, skills,
+                chatModel, toolLoopConfig, compactor, hooks, memoryProvider,
+                approvalHandler, orchestrationPort, tenantRuntimeFactory,
+                delegateRegistry, tenantGuard, null, false, null);
     }
 
     /**
@@ -177,7 +214,9 @@ public class AgentRuntime {
         // 1. Record user message
         UserMessage userMessage = new UserMessage(
                 UUID.randomUUID().toString(), userInput, "user");
-        sessionManager.appendMessage(context.sessionKey(), userMessage);
+        if (!context.stateless()) {
+            sessionManager.appendMessage(context.sessionKey(), userMessage);
+        }
 
         // 2. Resolve tools, prompt, and ChatClient — tenant-aware or singleton
         List<ToolCallback> jaiclawTools;
@@ -190,7 +229,7 @@ public class AgentRuntime {
             systemPrompt = tenantCtx.resolvedSystemPrompt();
             effectiveClientBuilder = tenantCtx.chatClientBuilder();
         } else {
-            jaiclawTools = toolRegistry.resolveForProfile(context.toolProfile());
+            jaiclawTools = resolveToolsForSingleton();
             systemPrompt = buildSystemPrompt(jaiclawTools, context);
             effectiveClientBuilder = chatClientBuilder;
         }
@@ -235,17 +274,21 @@ public class AgentRuntime {
                         result.content() != null ? result.content() : "",
                         "default"
                 );
-                sessionManager.appendMessage(context.sessionKey(), assistantMessage);
+                if (!context.stateless()) {
+                    sessionManager.appendMessage(context.sessionKey(), assistantMessage);
+                }
                 fireVoid(HookName.AGENT_END, assistantMessage, context.sessionKey());
                 return assistantMessage;
             }
         }
 
         // 2. Get/create session
-        var session = sessionManager.get(context.sessionKey()).orElse(context.session());
+        var session = context.stateless()
+                ? context.session()
+                : sessionManager.get(context.sessionKey()).orElse(context.session());
 
         // 3. Compaction: if compactor != null, compact history before appending new message
-        if (compactor != null) {
+        if (!context.stateless() && compactor != null) {
             var currentMessages = session.messages();
             if (!currentMessages.isEmpty()) {
                 List<io.jaiclaw.core.model.Message> compacted = compactor.compactIfNeeded(
@@ -269,7 +312,9 @@ public class AgentRuntime {
         // 5. Append current UserMessage to session
         UserMessage userMessage = new UserMessage(
                 UUID.randomUUID().toString(), userInput, "user");
-        sessionManager.appendMessage(context.sessionKey(), userMessage);
+        if (!context.stateless()) {
+            sessionManager.appendMessage(context.sessionKey(), userMessage);
+        }
 
         // 6. Resolve tools and system prompt — tenant-aware or singleton
         List<ToolCallback> jaiclawTools;
@@ -288,7 +333,7 @@ public class AgentRuntime {
                     ? context.tenantConfig().toolLoop().toConfig()
                     : toolLoopConfig;
         } else {
-            jaiclawTools = toolRegistry.resolveForProfile(context.toolProfile());
+            jaiclawTools = resolveToolsForSingleton();
             systemPrompt = buildSystemPrompt(jaiclawTools, context);
             effectiveClientBuilder = chatClientBuilder;
             effectiveChatModel = chatModel;
@@ -396,7 +441,9 @@ public class AgentRuntime {
                 .usage(tokenUsage)
                 .metadata(Map.of())
                 .build();
-        sessionManager.appendMessage(context.sessionKey(), assistantMessage);
+        if (!context.stateless()) {
+            sessionManager.appendMessage(context.sessionKey(), assistantMessage);
+        }
 
         // 14. AGENT_END hook
         fireVoid(HookName.AGENT_END, assistantMessage, context.sessionKey());
@@ -409,7 +456,7 @@ public class AgentRuntime {
             TenantAgentExecutionContext tenantCtx = tenantRuntimeFactory.createContext(context.tenantConfig());
             return tenantCtx.resolvedSystemPrompt();
         }
-        return buildSystemPrompt(toolRegistry.resolveForProfile(context.toolProfile()), context);
+        return buildSystemPrompt(resolveToolsForSingleton(), context);
     }
 
     private AgentLoopDelegateContext buildDelegateContext(AgentRuntimeContext context, String systemPrompt) {
@@ -435,11 +482,33 @@ public class AgentRuntime {
         );
     }
 
+    /**
+     * Resolve tools for the singleton (non-tenant) path using the deployment-time tool policy.
+     */
+    private List<ToolCallback> resolveToolsForSingleton() {
+        ToolProfile profile = resolveProfile(defaultToolPolicy.profile());
+        return toolRegistry.resolveForPolicy(profile, defaultToolPolicy.allow(), defaultToolPolicy.deny());
+    }
+
+    private static ToolProfile resolveProfile(String profileName) {
+        if (profileName == null) return ToolProfile.FULL;
+        try {
+            return ToolProfile.valueOf(profileName.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown tool profile '{}', defaulting to FULL", profileName);
+            return ToolProfile.FULL;
+        }
+    }
+
     private String buildSystemPrompt(List<ToolCallback> tools, AgentRuntimeContext context) {
+        if (replaceSystemPrompt && !defaultAdditionalInstructions.isEmpty()) {
+            return defaultAdditionalInstructions;
+        }
         return new SystemPromptBuilder()
                 .tools(tools)
                 .skills(skills)
                 .identity(context.identity())
+                .additionalInstructions(defaultAdditionalInstructions)
                 .build();
     }
 
@@ -539,6 +608,7 @@ public class AgentRuntime {
         private TenantAgentRuntimeFactory tenantRuntimeFactory;
         private AgentLoopDelegateRegistry delegateRegistry;
         private TenantGuard tenantGuard;
+        private AgentProperties.ToolPolicyConfig defaultToolPolicy;
 
         public Builder sessionManager(SessionManager sessionManager) { this.sessionManager = sessionManager; return this; }
         public Builder chatClientBuilder(ChatClient.Builder chatClientBuilder) { this.chatClientBuilder = chatClientBuilder; return this; }
@@ -554,11 +624,13 @@ public class AgentRuntime {
         public Builder tenantRuntimeFactory(TenantAgentRuntimeFactory tenantRuntimeFactory) { this.tenantRuntimeFactory = tenantRuntimeFactory; return this; }
         public Builder delegateRegistry(AgentLoopDelegateRegistry delegateRegistry) { this.delegateRegistry = delegateRegistry; return this; }
         public Builder tenantGuard(TenantGuard tenantGuard) { this.tenantGuard = tenantGuard; return this; }
+        public Builder defaultToolPolicy(AgentProperties.ToolPolicyConfig defaultToolPolicy) { this.defaultToolPolicy = defaultToolPolicy; return this; }
 
         public AgentRuntime build() {
             return new AgentRuntime(sessionManager, chatClientBuilder, toolRegistry, skills,
                     chatModel, toolLoopConfig, compactor, hooks, memoryProvider,
-                    approvalHandler, orchestrationPort, tenantRuntimeFactory, delegateRegistry, tenantGuard);
+                    approvalHandler, orchestrationPort, tenantRuntimeFactory, delegateRegistry, tenantGuard,
+                    null, false, defaultToolPolicy);
         }
     }
 }

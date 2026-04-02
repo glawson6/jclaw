@@ -37,5 +37,6 @@
         <module>jaiclaw-discord-tools</module>
         <module>jaiclaw-slack-tools</module>
         <module>jaiclaw-voice-call</module>
+        <module>jaiclaw-camel</module>
     </modules>
 </project>

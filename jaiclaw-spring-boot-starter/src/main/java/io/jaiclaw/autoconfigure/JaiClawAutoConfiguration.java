@@ -54,6 +54,7 @@ import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.http.HttpClient;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -349,6 +350,7 @@ public class JaiClawAutoConfiguration {
             SkillLoader skillLoader,
             JaiClawProperties properties,
             TenantGuard tenantGuard,
+            org.springframework.core.env.Environment env,
             ObjectProvider<ChatModel> chatModelProvider,
             ObjectProvider<ContextCompactor> compactorProvider,
             ObjectProvider<AgentHookDispatcher> hooksProvider,
@@ -362,13 +364,52 @@ public class JaiClawAutoConfiguration {
                 properties.skills().allowBundled(),
                 properties.skills().workspaceDir());
 
-        // Resolve tool loop config from properties
-        var agents = properties.agent().agents();
-        var agentConfig = agents != null
+        // Resolve agent config from properties
+        Map<String, io.jaiclaw.config.AgentProperties.AgentConfig> agents = properties.agent().agents();
+        io.jaiclaw.config.AgentProperties.AgentConfig agentConfig = agents != null
                 ? agents.getOrDefault(properties.agent().defaultAgent(),
                         io.jaiclaw.config.AgentProperties.AgentConfig.DEFAULT)
                 : io.jaiclaw.config.AgentProperties.AgentConfig.DEFAULT;
         ToolLoopConfig toolLoopConfig = agentConfig.toolLoop().toConfig();
+
+        // Resolve system prompt — first try the bound config, then fall back to Environment
+        // (Spring Boot record binding for Map<String, Record> with many fields can silently fail)
+        io.jaiclaw.config.SystemPromptConfig systemPromptConfig = agentConfig.systemPrompt();
+        if (systemPromptConfig == null) {
+            String prefix = "jaiclaw.agent.agents." + properties.agent().defaultAgent() + ".system-prompt";
+            String strategy = env.getProperty(prefix + ".strategy");
+            if (strategy != null) {
+                String content = env.getProperty(prefix + ".content");
+                String source = env.getProperty(prefix + ".source");
+                boolean append = Boolean.parseBoolean(env.getProperty(prefix + ".append", "false"));
+                systemPromptConfig = new io.jaiclaw.config.SystemPromptConfig(strategy, content, source, append);
+                log.info("System prompt resolved from Environment (record binding fallback) — strategy: {}", strategy);
+            }
+        }
+
+        String additionalInstructions = "";
+        boolean replaceSystemPrompt = false;
+        if (systemPromptConfig != null) {
+            SystemPromptLoaderFactory promptLoader = new SystemPromptLoaderFactory();
+            additionalInstructions = promptLoader.load(systemPromptConfig);
+            replaceSystemPrompt = !systemPromptConfig.append();
+            log.info("System prompt configured — strategy: {}, replace: {}, length: {}",
+                    systemPromptConfig.strategy(), replaceSystemPrompt, additionalInstructions.length());
+        } else {
+            log.info("No system-prompt configured for agent '{}'", properties.agent().defaultAgent());
+        }
+
+        // Resolve tool policy — first try the bound config, then fall back to Environment
+        io.jaiclaw.config.AgentProperties.ToolPolicyConfig toolPolicy = agentConfig.tools();
+        String toolPolicyPrefix = "jaiclaw.agent.agents." + properties.agent().defaultAgent() + ".tools";
+        String envProfile = env.getProperty(toolPolicyPrefix + ".profile");
+        if (envProfile != null && !envProfile.equals(toolPolicy.profile())) {
+            toolPolicy = new io.jaiclaw.config.AgentProperties.ToolPolicyConfig(
+                    envProfile, toolPolicy.allow(), toolPolicy.deny());
+            log.info("Tool policy resolved from Environment (record binding fallback) — profile: {}", envProfile);
+        }
+        log.info("Tool policy — profile: {}, allow: {}, deny: {}",
+                toolPolicy.profile(), toolPolicy.allow(), toolPolicy.deny());
 
         AgentRuntime runtime = new AgentRuntime(
                 sessionManager,
@@ -384,7 +425,10 @@ public class JaiClawAutoConfiguration {
                 orchestrationPortProvider.getIfAvailable(),
                 tenantRuntimeFactoryProvider.getIfAvailable(),
                 delegateRegistryProvider.getIfAvailable(),
-                tenantGuard
+                tenantGuard,
+                additionalInstructions,
+                replaceSystemPrompt,
+                toolPolicy
         );
 
         Set<String> toolNames = toolRegistry.toolNames();

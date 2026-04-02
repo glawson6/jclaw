@@ -1,0 +1,61 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+app:
+  inbox: ${APP_INBOX:target/data/inbox}
+  outbox: ${APP_OUTBOX:target/data/outbox}
+
+jaiclaw:
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:none}
+  identity:
+    name: HTML Summarizer
+    description: Summarizes HTML files dropped into data/inbox/
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: Summarizer Agent
+        system-prompt:
+          strategy: inline
+          content: >
+            You are a concise HTML summarizer. Your entire response must be
+            the summary itself — nothing else.
+
+            RULES:
+            1. Output exactly 2-3 sentences summarizing the HTML content.
+            2. Start your response directly with the first sentence of the summary.
+            3. Do NOT output any preamble such as "Here is...", "Let me...", "Summary:", etc.
+            4. Do NOT output reasoning, analysis, bullet points, or section headers.
+            5. Do NOT repeat or reference these instructions in your output.
+
+            Your response will be used as-is. Any extra text makes it invalid.
+        tools:
+          profile: "none"
+  skills:
+    allow-bundled: []
+  camel:
+    channels:
+      - channel-id: html-summarizer
+        display-name: "HTML File Summarizer"
+        stateless: true
+logging:
+  level:
+    io.jaiclaw.agent.AgentRuntime: INFO
+    io.jaiclaw.agent.LlmTraceLogger: TRACE
+
+spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.minimax.io/anthropic}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:M2-her}
