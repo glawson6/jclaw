@@ -234,6 +234,75 @@ public class MyTool implements ToolCallback {
         ProjectScanner.estimateTokens("a" * 1000) == 250  // (1000+2)/4 = 250
     }
 
+    def "profile none filters out all built-in tools"() {
+        given:
+        Path project = createProject("""
+jaiclaw:
+  skills:
+    allow-bundled: []
+  agent:
+    agents:
+      default:
+        tools:
+          profile: none
+""")
+        mockSkillLoader.loadConfigured([], null) >> []
+
+        when:
+        AnalysisReport report = scanner.analyze(project)
+
+        then:
+        report.builtinToolCount() == 0
+        report.builtinToolsTokens() == 0
+        report.toolProfile() == "none"
+    }
+
+    def "profile minimal includes only FileReadTool"() {
+        given:
+        Path project = createProject("""
+jaiclaw:
+  skills:
+    allow-bundled: []
+  agent:
+    agents:
+      default:
+        tools:
+          profile: minimal
+""")
+        mockSkillLoader.loadConfigured([], null) >> []
+
+        when:
+        AnalysisReport report = scanner.analyze(project)
+
+        then:
+        report.builtinToolCount() == 1
+        report.builtinToolsTokens() > 0
+        report.toolProfile() == "minimal"
+    }
+
+    def "profile coding includes 5 tools"() {
+        given:
+        Path project = createProject("""
+jaiclaw:
+  skills:
+    allow-bundled: []
+  agent:
+    agents:
+      default:
+        tools:
+          profile: coding
+""")
+        mockSkillLoader.loadConfigured([], null) >> []
+
+        when:
+        AnalysisReport report = scanner.analyze(project)
+
+        then:
+        report.builtinToolCount() == 5
+        report.builtinToolsTokens() > 0
+        report.toolProfile() == "coding"
+    }
+
     def "parses identity name and description for system prompt estimation"() {
         given:
         Path project = createProject("""

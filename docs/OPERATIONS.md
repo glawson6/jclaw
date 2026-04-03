@@ -920,6 +920,46 @@ The analyzer scans `application.yml`, resolves skills and tools, and produces a 
 
 See [CLI Tools Reference](../../../dev/docs/jaiclaw/dev-guide/cli-tools.md#jaiclaw-prompt-analyzer) for full documentation.
 
+### Maven Plugin (CI/CD Integration)
+
+The `jaiclaw-maven-plugin` runs the same analysis during the Maven build lifecycle, failing the build if a token threshold is exceeded. All JaiClaw examples include this plugin by default.
+
+**Add to your project's `pom.xml`:**
+
+```xml
+<plugin>
+    <groupId>io.jaiclaw</groupId>
+    <artifactId>jaiclaw-maven-plugin</artifactId>
+    <version>${project.version}</version>
+    <executions>
+        <execution>
+            <goals><goal>analyze</goal></goals>
+        </execution>
+    </executions>
+    <configuration>
+        <threshold>5000</threshold>          <!-- fail if tokens exceed this -->
+        <failOnWarning>true</failOnWarning>  <!-- fail on missing allow-bundled -->
+    </configuration>
+</plugin>
+```
+
+**On-demand analysis** (no POM changes needed):
+
+```bash
+./mvnw io.jaiclaw:jaiclaw-maven-plugin:analyze -pl :my-agent-app
+./mvnw io.jaiclaw:jaiclaw-maven-plugin:analyze -pl :my-agent-app -Djaiclaw.analyze.threshold=5000
+```
+
+**Parameters:**
+
+| Parameter | Property | Default | Description |
+|-----------|----------|---------|-------------|
+| `threshold` | `jaiclaw.analyze.threshold` | `0` (disabled) | Fail if tokens exceed this |
+| `failOnWarning` | `jaiclaw.analyze.failOnWarning` | `false` | Fail if warnings present |
+| `skip` | `jaiclaw.analyze.skip` | `false` | Skip analysis entirely |
+
+The plugin runs during the `verify` phase and gracefully skips modules without `application.yml`.
+
 See [Token Usage Logging](#token-usage-logging) for how to enable detailed request/response tracing.
 
 ---

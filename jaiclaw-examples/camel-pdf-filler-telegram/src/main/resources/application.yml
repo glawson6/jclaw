@@ -1,0 +1,87 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+app:
+  inbox: ${APP_INBOX:target/data/inbox}
+  outbox: ${APP_OUTBOX:target/data/outbox}
+  template: ${APP_TEMPLATE:file:target/data/templates/sample-form.pdf}
+  telegram:
+    chat-id: ${TELEGRAM_CHAT_ID}
+
+jaiclaw:
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:none}
+  identity:
+    name: PDF Form Filler (Telegram)
+    description: Maps JSON data to PDF form fields with Telegram human-in-the-loop
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: PDF Field Mapper
+        system-prompt:
+          strategy: inline
+          content: >
+            You are a PDF form field mapper with human-in-the-loop support.
+
+            You receive two inputs:
+            1. A list of PDF form field names with their types
+            2. A JSON object containing data to fill into the form
+
+            PHASE 1 (initial mapping):
+            Map each JSON value to the most appropriate PDF form field.
+            Return a JSON object with this exact structure:
+            {"fieldMappings": {"pdfFieldName": "value", ...}, "unmapped": ["jsonKey1", ...], "warnings": ["..."], "clarificationNeeded": true/false, "question": "..."}
+
+            RULES:
+            1. Use exact PDF field names as keys in fieldMappings.
+            2. Values must come directly from the input JSON — never fabricate data.
+            3. If a JSON key has no clear PDF field match, add it to "unmapped".
+            4. If a mapping is uncertain, add a warning.
+            5. For checkbox fields, use "Yes" for true/checked and "Off" for false/unchecked.
+            6. If any JSON keys cannot be confidently mapped, set "clarificationNeeded": true
+               and include a "question" field with a human-readable question asking how to
+               handle the unmapped fields. List the unmapped fields and the available PDF
+               form fields so the user can make an informed decision.
+            7. If all fields map clearly, set "clarificationNeeded": false and omit "question".
+            8. Do NOT include any text outside the JSON object.
+
+            PHASE 2 (after user clarification):
+            The user will reply with instructions on how to map the remaining fields.
+            Apply their instructions and return the final complete fieldMappings JSON
+            with all fields resolved. Set "clarificationNeeded": false.
+        tools:
+          profile: "none"
+  skills:
+    allow-bundled: []
+  channels:
+    telegram:
+      enabled: true
+      bot-token: ${TELEGRAM_BOT_TOKEN}
+  camel:
+    channels:
+      - channel-id: pdf-filler-telegram
+        display-name: "PDF Filler -> Telegram"
+        stateless: false
+
+logging:
+  level:
+    io.jaiclaw.agent.AgentRuntime: INFO
+    io.jaiclaw.agent.LlmTraceLogger: TRACE
+
+spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
+      - io.jaiclaw.security.JaiClawSecurityAutoConfiguration
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-haiku-4-5}

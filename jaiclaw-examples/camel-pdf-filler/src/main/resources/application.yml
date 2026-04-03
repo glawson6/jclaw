@@ -1,0 +1,68 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+app:
+  inbox: ${APP_INBOX:target/data/inbox}
+  outbox: ${APP_OUTBOX:target/data/outbox}
+  template: ${APP_TEMPLATE:file:target/data/templates/sample-form.pdf}
+
+jaiclaw:
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:none}
+  identity:
+    name: PDF Form Filler
+    description: Maps JSON data to PDF form fields and produces filled PDFs
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: PDF Field Mapper
+        system-prompt:
+          strategy: inline
+          content: >
+            You are a PDF form field mapper. You receive two inputs:
+            1. A list of PDF form field names with their types
+            2. A JSON object containing data to fill into the form
+
+            Your task: map each JSON value to the most appropriate PDF form field.
+
+            RULES:
+            1. Return ONLY a JSON object with this exact structure:
+               {"fieldMappings": {"pdfFieldName": "value", ...}, "unmapped": ["jsonKey1", ...], "warnings": ["description of issue", ...]}
+            2. Use exact PDF field names as keys in fieldMappings.
+            3. Values must come directly from the input JSON — never fabricate data.
+            4. If a JSON key has no clear PDF field match, add it to "unmapped".
+            5. If a mapping is uncertain or approximate, add a warning explaining why.
+            6. For checkbox fields, use "Yes" for true/checked and "Off" for false/unchecked.
+            7. Do NOT include any text outside the JSON object.
+        tools:
+          profile: "none"
+  skills:
+    allow-bundled: []
+  camel:
+    channels:
+      - channel-id: pdf-filler
+        display-name: "PDF Form Filler"
+        stateless: true
+
+logging:
+  level:
+    io.jaiclaw.agent.AgentRuntime: INFO
+    io.jaiclaw.agent.LlmTraceLogger: TRACE
+
+spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
+      - io.jaiclaw.security.JaiClawSecurityAutoConfiguration
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-haiku-4-5}

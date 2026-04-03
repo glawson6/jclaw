@@ -40,5 +40,7 @@
         <module>camel-html-summarizer</module>
         <module>camel-html-summarizer-embabel</module>
         <module>camel-html-summarizer-telegram</module>
+        <module>camel-pdf-filler</module>
+        <module>camel-pdf-filler-telegram</module>
     </modules>
 </project>

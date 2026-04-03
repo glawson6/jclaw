@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.jaiclaw.core.skill.SkillDefinition;
 import io.jaiclaw.core.tool.ToolCallback;
+import io.jaiclaw.core.tool.ToolProfile;
 import io.jaiclaw.skills.SkillLoader;
 import io.jaiclaw.tools.builtin.BuiltinTools;
 import org.slf4j.Logger;
@@ -74,8 +75,11 @@ public class ProjectScanner {
                 ? List.of("*")
                 : skills.stream().map(SkillDefinition::name).toList();
 
-        // 3. Resolve built-in tools
-        List<ToolCallback> builtinTools = BuiltinTools.all();
+        // 3. Resolve built-in tools (filtered by tool profile)
+        ToolProfile resolvedProfile = resolveToolProfile(toolProfile);
+        List<ToolCallback> builtinTools = BuiltinTools.all().stream()
+                .filter(t -> t.definition().isAvailableIn(resolvedProfile))
+                .toList();
         int builtinToolsTokens = builtinTools.stream()
                 .mapToInt(t -> {
                     io.jaiclaw.core.tool.ToolDefinition def = t.definition();
@@ -109,6 +113,17 @@ public class ProjectScanner {
                 toolProfile,
                 List.copyOf(warnings)
         );
+    }
+
+    private ToolProfile resolveToolProfile(String profileName) {
+        if (profileName == null) return ToolProfile.FULL;
+        return switch (profileName.toUpperCase()) {
+            case "NONE"      -> ToolProfile.NONE;
+            case "MINIMAL"   -> ToolProfile.MINIMAL;
+            case "CODING"    -> ToolProfile.CODING;
+            case "MESSAGING" -> ToolProfile.MESSAGING;
+            default          -> ToolProfile.FULL;
+        };
     }
 
     private List<String> parseAllowBundled(JsonNode root, List<String> warnings) {

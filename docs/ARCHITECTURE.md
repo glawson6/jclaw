@@ -67,7 +67,7 @@ JaiClaw is a Java 21 / Spring Boot 3.5 / Spring AI personal AI assistant framewo
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐     │
 │  │  jaiclaw-docs│ │ jaiclaw-media│ │jaiclaw-audit │ │jaiclaw-compaction│     │
 │  │  PDF / HTML  │ │ vision/audio │ │ AuditLogger  │ │ context window   │     │
-│  │  parsing     │ │ analysis     │ │              │ │ summarization    │     │
+│  │  parse+fill  │ │ analysis     │ │              │ │ summarization    │     │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘     │
 │                                                                              │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐     │
@@ -103,7 +103,8 @@ JaiClaw is a Java 21 / Spring Boot 3.5 / Spring AI personal AI assistant framewo
 │  │                        jaiclaw-core                                   │   │
 │  │  Records: Message, Session, CronJob, ToolResult, DeliveryResult       │   │
 │  │  Sealed interfaces: Message, ToolResult, DeliveryResult               │   │
-│  │  Enums: ToolProfile, PluginKind, HookName                             │   │
+│  │  Enums: ToolProfile, PluginKind, HookName, ArtifactStatus             │   │
+│  │  SPIs: ArtifactStore (binary blob persistence)                        │   │
 │  └───────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -132,7 +133,7 @@ jaiclaw-core  (pure Java — NO Spring dependency)
   +---> jaiclaw-plugin-sdk  (JaiClawPlugin SPI, PluginApi, HookRunner, PluginDiscovery)
   +---> jaiclaw-memory  (MemorySearchManager SPI, InMemorySearchManager, VectorStore)
   +---> jaiclaw-security  (JWT auth, TenantResolver, SecurityContext)
-  +---> jaiclaw-documents  (PDF/HTML/text parsing, chunking pipeline)
+  +---> jaiclaw-documents  (PDF/HTML/text parsing, PDF form reading/filling, chunking pipeline)
   +---> jaiclaw-media  (async media analysis SPI, CompositeMediaAnalyzer)
   +---> jaiclaw-audit  (AuditEvent, AuditLogger SPI, InMemoryAuditLogger)
   +---> jaiclaw-compaction  (context window compaction via summarization)
@@ -153,6 +154,7 @@ jaiclaw-core  (pure Java — NO Spring dependency)
           |       +---> jaiclaw-shell  (Spring Shell CLI)
           |
           +---> jaiclaw-examples  (10 standalone example applications)
+          +---> jaiclaw-maven-plugin  (jaiclaw:analyze goal — CI token budget enforcement)
 ```
 
 ---
@@ -453,6 +455,8 @@ env:
 | Memory search (in-memory + vector)| Done        | `jaiclaw-memory`               |
 | Multi-tenancy + JWT auth         | Done         | `jaiclaw-core` + `jaiclaw-security` |
 | Document parsing + chunking      | Done         | `jaiclaw-documents`            |
+| PDF form reading + filling       | Done         | `jaiclaw-documents`            |
+| Artifact storage SPI             | Done         | `jaiclaw-core` (artifact/)     |
 | Media analysis SPI               | Done         | `jaiclaw-media`                |
 | Audit logging SPI                | Done         | `jaiclaw-audit`                |
 | Auto-configuration               | Done         | `jaiclaw-spring-boot-starter`  |
@@ -473,6 +477,7 @@ env:
 | Standalone gateway app           | Done         | `jaiclaw-gateway-app`          |
 | Docker image build (JKube)       | Done         | `-Pk8s` profile in POMs      |
 | HTTP proxy support               | Done         | `jaiclaw-core` + `jaiclaw-config` + starter |
+| Maven plugin (CI token check)   | Done         | `jaiclaw-maven-plugin`         |
 | **Helm chart**                   | **Needed**   | `helm/spring-boot-app/`      |
 | **Redis session store**          | **Planned**  | `jaiclaw-agent` (swap in-mem)  |
 | **Kafka event bus**              | **Optional** | cross-cutting                |

@@ -1,0 +1,10 @@
+{
+  "fullName": "John Doe",
+  "email": "john.doe@example.com",
+  "phone": "555-123-4567",
+  "address": "123 Main Street",
+  "city": "Springfield",
+  "state": "IL",
+  "zipCode": "62701",
+  "agreedToTerms": true
+}
