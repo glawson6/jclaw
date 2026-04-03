@@ -1,0 +1,99 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+app:
+  inbox: ${APP_INBOX:target/data/inbox}
+  outbox: ${APP_OUTBOX:target/data/outbox}
+
+jaiclaw:
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:none}
+  identity:
+    name: Embabel HTML Summarizer
+    description: Summarizes HTML files using Embabel GOAP planning for structured output
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: Embabel Summarizer Agent
+        system-prompt:
+          strategy: inline
+          content: >
+            You are a concise HTML summarizer that produces structured output.
+        tools:
+          profile: "none"
+        loop-delegate:
+          enabled: true
+          delegate-id: embabel
+          workflow: HtmlSummaryAgent
+  skills:
+    allow-bundled: []
+  camel:
+    channels:
+      - channel-id: embabel-html-summarizer
+        display-name: "Embabel HTML File Summarizer"
+        stateless: true
+
+# =============================================================================
+# Embabel LLM Model Configuration
+# =============================================================================
+#
+# Embabel owns the model registry — NOT Spring AI. The custom YAML at
+# models/anthropic-models.yml defines available models. Each model's `model_id`
+# serves double duty:
+#   1. Registry key — embabel.models.default-llm must match a model_id
+#   2. API model name — sent in the Anthropic API request body
+#
+# Embabel creates its OWN AnthropicChatModel beans from the YAML. It reads
+# api-key and base-url from embabel.agent.platform.models.anthropic.*, NOT
+# from spring.ai.anthropic.*. Both must be set independently.
+#
+# The spring.ai.anthropic.* section is only used by Spring AI's own auto-
+# configured ChatModel bean (used by JaiClaw's ChatClient loop, not Embabel).
+#
+# Available model_ids (from models/anthropic-models.yml):
+#   Anthropic: claude-haiku-4-5, claude-sonnet-4-5, claude-sonnet-4-6
+#   MiniMax:   MiniMax-M2.7 (set ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic)
+# =============================================================================
+
+# Embabel model registry — picks which LLM the GOAP planner uses
+embabel:
+  models:
+    default-llm: ${EMBABEL_DEFAULT_LLM:${ANTHROPIC_MODEL:claude-haiku-4-5}}
+  agent:
+    platform:
+      test:
+        mock-mode: false    # Embabel defaults to mock-mode=true
+      models:
+        anthropic:
+          api-key: ${ANTHROPIC_API_KEY:not-set}
+          base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+
+# Spring AI Anthropic client — used by JaiClaw's ChatClient loop (not Embabel)
+spring:
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-haiku-4-5}
+    # Embabel's agent-application.properties sets spring.ai.openai.api-key=${OPENAI_API_KEY}
+    # which fails if OPENAI_API_KEY is unset. Provide a harmless fallback.
+    openai:
+      api-key: ${OPENAI_API_KEY:not-configured}
+      enabled: false
+
+logging:
+  level:
+    io.jaiclaw.agent.AgentRuntime: INFO
+    io.jaiclaw.agent.LlmTraceLogger: INFO
+    io.jaiclaw.embabel.delegate: DEBUG
+    io.jaiclaw.examples.embabel.summarizer: DEBUG
+    com.embabel.agent: INFO
+    # Reduce noisy Embabel startup scanning logs
+    com.embabel.agent.spi.support.DelegatingAgentScanningBeanPostProcessor: WARN

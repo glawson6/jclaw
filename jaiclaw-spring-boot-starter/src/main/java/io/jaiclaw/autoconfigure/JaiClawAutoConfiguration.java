@@ -299,9 +299,12 @@ public class JaiClawAutoConfiguration {
     @ConditionalOnMissingBean
     public TenantAgentConfigService tenantAgentConfigService(JaiClawProperties properties,
                                                               TenantEnvLoader envLoader,
-                                                              ResourceLoader resourceLoader) {
+                                                              ResourceLoader resourceLoader,
+                                                              org.springframework.core.env.Environment env) {
+        io.jaiclaw.config.AgentLoopDelegateConfig loopDelegateOverride =
+                resolveLoopDelegateFromEnvironment(properties, env);
         return new TenantAgentConfigService(
-                properties.tenant(), properties.agent(), envLoader, resourceLoader);
+                properties.tenant(), properties.agent(), envLoader, resourceLoader, loopDelegateOverride);
     }
 
     @Bean
@@ -334,8 +337,13 @@ public class JaiClawAutoConfiguration {
     @ConditionalOnMissingBean
     public AgentLoopDelegateRegistry agentLoopDelegateRegistry(
             ObjectProvider<List<AgentLoopDelegate>> delegatesProvider) {
-        List<AgentLoopDelegate> delegates = delegatesProvider.getIfAvailable();
-        return new AgentLoopDelegateRegistry(delegates != null ? delegates : List.of());
+        // Use lazy resolution to avoid auto-config ordering issues.
+        // Delegates from other auto-configs (e.g., EmbabelDelegateAutoConfiguration)
+        // may not be registered yet when this bean is created.
+        return new AgentLoopDelegateRegistry(() -> {
+            List<AgentLoopDelegate> delegates = delegatesProvider.getIfAvailable();
+            return delegates != null ? delegates : List.of();
+        });
     }
 
     // --- AgentRuntime with full SPI wiring ---
@@ -457,5 +465,38 @@ public class JaiClawAutoConfiguration {
     @ConditionalOnMissingBean(type = "io.jaiclaw.tools.bridge.embabel.AgentOrchestrationPort")
     public io.jaiclaw.tools.bridge.embabel.NoOpOrchestrationPort noOpOrchestrationPort() {
         return new io.jaiclaw.tools.bridge.embabel.NoOpOrchestrationPort();
+    }
+
+    /**
+     * Resolve loop-delegate config from Environment properties.
+     * Spring Boot record binding for {@code Map<String, Record>} with many fields can silently fail
+     * for deeply nested records like {@code loop-delegate}. This method reads directly from the
+     * Environment as a fallback, matching the pattern used for {@code system-prompt}.
+     *
+     * @return resolved config, or {@code null} if no loop-delegate properties are set
+     */
+    private io.jaiclaw.config.AgentLoopDelegateConfig resolveLoopDelegateFromEnvironment(
+            JaiClawProperties properties,
+            org.springframework.core.env.Environment env) {
+        String prefix = "jaiclaw.agent.agents." + properties.agent().defaultAgent() + ".loop-delegate";
+        String envEnabled = env.getProperty(prefix + ".enabled");
+        String envDelegateId = env.getProperty(prefix + ".delegate-id");
+
+        if (envEnabled == null && envDelegateId == null) {
+            return null;
+        }
+
+        boolean enabled = Boolean.parseBoolean(envEnabled);
+        String workflow = env.getProperty(prefix + ".workflow");
+        String llmRole = env.getProperty(prefix + ".llm-role");
+        int timeout = Integer.parseInt(env.getProperty(prefix + ".timeout-seconds", "120"));
+
+        io.jaiclaw.config.AgentLoopDelegateConfig config =
+                new io.jaiclaw.config.AgentLoopDelegateConfig(
+                        enabled, envDelegateId, workflow, llmRole, timeout, Map.of());
+
+        log.info("Loop-delegate resolved from Environment — enabled: {}, delegateId: {}, workflow: {}",
+                enabled, envDelegateId, workflow);
+        return config;
     }
 }

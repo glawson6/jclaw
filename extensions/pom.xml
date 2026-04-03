@@ -38,5 +38,6 @@
         <module>jaiclaw-slack-tools</module>
         <module>jaiclaw-voice-call</module>
         <module>jaiclaw-camel</module>
+        <module>jaiclaw-embabel-delegate</module>
     </modules>
 </project>

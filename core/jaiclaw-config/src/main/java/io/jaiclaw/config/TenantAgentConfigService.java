@@ -40,16 +40,31 @@ public class TenantAgentConfigService {
     private final AgentProperties agentProperties;
     private final TenantEnvLoader envLoader;
     private final ResourceLoader resourceLoader;
+    private final AgentLoopDelegateConfig loopDelegateOverride;
     private final ConcurrentHashMap<String, TenantAgentConfig> cache = new ConcurrentHashMap<>();
 
     public TenantAgentConfigService(TenantConfigProperties tenantConfig,
                                     AgentProperties agentProperties,
                                     TenantEnvLoader envLoader,
                                     ResourceLoader resourceLoader) {
+        this(tenantConfig, agentProperties, envLoader, resourceLoader, null);
+    }
+
+    /**
+     * Constructor with optional loop-delegate override.
+     * The override is applied when the bound AgentConfig has a null or disabled loopDelegate,
+     * which happens when Spring Boot's record binding silently fails for deeply nested records.
+     */
+    public TenantAgentConfigService(TenantConfigProperties tenantConfig,
+                                    AgentProperties agentProperties,
+                                    TenantEnvLoader envLoader,
+                                    ResourceLoader resourceLoader,
+                                    AgentLoopDelegateConfig loopDelegateOverride) {
         this.tenantConfig = tenantConfig;
         this.agentProperties = agentProperties;
         this.envLoader = envLoader;
         this.resourceLoader = resourceLoader;
+        this.loopDelegateOverride = loopDelegateOverride;
     }
 
     /**
@@ -99,6 +114,31 @@ public class TenantAgentConfigService {
         AgentProperties.AgentConfig defaultConfig = agents != null
                 ? agents.getOrDefault(agentProperties.defaultAgent(), AgentProperties.AgentConfig.DEFAULT)
                 : AgentProperties.AgentConfig.DEFAULT;
+
+        // Apply loop-delegate override if the bound config has null/disabled delegate
+        // (Spring Boot record binding for Map<String, Record> with many fields can silently fail)
+        if (loopDelegateOverride != null && loopDelegateOverride.enabled()
+                && (defaultConfig.loopDelegate() == null || !defaultConfig.loopDelegate().enabled())) {
+            log.info("Applying loop-delegate override — delegateId: {}, workflow: {}",
+                    loopDelegateOverride.delegateId(), loopDelegateOverride.workflow());
+            defaultConfig = AgentProperties.AgentConfig.builder()
+                    .id(defaultConfig.id())
+                    .name(defaultConfig.name())
+                    .workspace(defaultConfig.workspace())
+                    .model(defaultConfig.model())
+                    .skills(defaultConfig.skills())
+                    .tools(defaultConfig.tools())
+                    .identity(defaultConfig.identity())
+                    .toolLoop(defaultConfig.toolLoop())
+                    .llm(defaultConfig.llm())
+                    .systemPrompt(defaultConfig.systemPrompt())
+                    .features(defaultConfig.features())
+                    .errorMessages(defaultConfig.errorMessages())
+                    .mcpServers(defaultConfig.mcpServers())
+                    .channels(defaultConfig.channels())
+                    .loopDelegate(loopDelegateOverride)
+                    .build();
+        }
 
         // In SINGLE mode or if no config locations, build from defaults
         if (tenantConfig.mode() != TenantMode.MULTI || tenantConfig.configLocations().isEmpty()) {

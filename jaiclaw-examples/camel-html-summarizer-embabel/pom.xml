@@ -10,14 +10,24 @@
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>jaiclaw-example-camel-html-summarizer</artifactId>
-    <name>JaiClaw :: Examples :: Camel HTML Summarizer</name>
-    <description>Demonstrates SEDA-based Camel routing: watches data/inbox/ for HTML files, agent summarizes, writes to data/outbox/</description>
+    <artifactId>jaiclaw-example-camel-html-summarizer-embabel</artifactId>
+    <name>JaiClaw :: Examples :: Camel HTML Summarizer (Embabel)</name>
+    <description>Camel file watcher + Embabel GOAP agent for structured HTML summarization with typed output
+    </description>
 
     <dependencies>
         <dependency>
             <groupId>io.jaiclaw</groupId>
-            <artifactId>jaiclaw-spring-boot-starter</artifactId>
+            <artifactId>jaiclaw-starter-embabel</artifactId>
+            <type>pom</type>
+        </dependency>
+        <dependency>
+            <groupId>com.embabel.agent</groupId>
+            <artifactId>embabel-agent-starter-anthropic</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jaiclaw</groupId>
+            <artifactId>jaiclaw-embabel-delegate</artifactId>
         </dependency>
         <dependency>
             <groupId>io.jaiclaw</groupId>
@@ -40,13 +50,6 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-anthropic</artifactId>
         </dependency>
-
-        <!--
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-minimax</artifactId>
-        </dependency>
-        -->
     </dependencies>
 
     <properties>

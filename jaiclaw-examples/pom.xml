@@ -38,5 +38,6 @@
         <module>oauth-provider-demo</module>
         <module>canvas-dashboard</module>
         <module>camel-html-summarizer</module>
+        <module>camel-html-summarizer-embabel</module>
     </modules>
 </project>
