@@ -39,5 +39,6 @@
         <module>canvas-dashboard</module>
         <module>camel-html-summarizer</module>
         <module>camel-html-summarizer-embabel</module>
+        <module>camel-html-summarizer-telegram</module>
     </modules>
 </project>
