@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "jaiclaw-docs": {
+      "url": "http://localhost:8888/mcp/docs/sse"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+server:
+  port: ${GATEWAY_PORT:8888}
+
+jaiclaw:
+  skills:
+    allow-bundled: []
+  docs:
+    enabled: true
+  security:
+    mode: ${JAICLAW_SECURITY_MODE:none}
+  identity:
+    name: MCP Docs Server
+    description: MCP server exposing JaiClaw documentation as resources with search
+  agent:
+    default-agent: default
+    agents:
+      default:
+        id: default
+        name: Docs Agent
+        tools:
+          profile: full
+
+spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
+  ai:
+    model:
+      chat: ${AI_PROVIDER:anthropic}
+    anthropic:
+      enabled: ${ANTHROPIC_ENABLED:true}
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-haiku-4-5-20251001}

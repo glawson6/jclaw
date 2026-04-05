@@ -1,6 +1,7 @@
 package io.jaiclaw.gateway.mcp;
 
-import io.jaiclaw.core.mcp.McpToolDefinition;
+import io.jaiclaw.core.mcp.McpResourceContent;
+import io.jaiclaw.core.mcp.McpResourceDefinition;
 import io.jaiclaw.core.mcp.McpToolResult;
 import io.jaiclaw.core.tenant.TenantContext;
 import io.jaiclaw.core.tenant.TenantContextHolder;
@@ -10,12 +11,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * REST controller exposing hosted MCP servers at {@code /mcp/{serverName}}.
- * Supports tool listing and tool execution via JSON-RPC-style endpoints.
+ * Supports tool listing/execution and resource listing/reading.
  */
 @RestController
 @RequestMapping("/mcp")
@@ -39,11 +41,22 @@ public class McpController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> listServers() {
         var servers = registry.serverNames().stream()
-                .map(name -> registry.get(name).map(p -> Map.of(
-                        "name", (Object) p.getServerName(),
-                        "description", (Object) p.getServerDescription(),
-                        "toolCount", (Object) p.getTools().size()
-                )).orElse(Map.of()))
+                .map(name -> {
+                    Map<String, Object> info = new LinkedHashMap<>();
+                    info.put("name", name);
+
+                    registry.get(name).ifPresent(p -> {
+                        info.put("description", p.getServerDescription());
+                        info.put("toolCount", p.getTools().size());
+                    });
+
+                    registry.getResourceProvider(name).ifPresent(p -> {
+                        info.putIfAbsent("description", p.getServerDescription());
+                        info.put("resourceCount", p.getResources().size());
+                    });
+
+                    return info;
+                })
                 .toList();
         return ResponseEntity.ok(Map.of("servers", servers));
     }
@@ -92,6 +105,63 @@ public class McpController {
                 return ResponseEntity.ok(Map.<String, Object>of(
                         "content", "Tool execution failed: " + e.getMessage(),
                         "isError", true));
+            } finally {
+                TenantContextHolder.clear();
+            }
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    /** List resources for a specific MCP server. */
+    @GetMapping("/{serverName}/resources")
+    public ResponseEntity<Map<String, Object>> listResources(@PathVariable String serverName) {
+        return registry.getResourceProvider(serverName)
+                .map(provider -> {
+                    List<Map<String, String>> resources = provider.getResources().stream()
+                            .map(r -> {
+                                Map<String, String> m = new LinkedHashMap<>();
+                                m.put("uri", r.uri());
+                                m.put("name", r.name());
+                                m.put("mimeType", r.mimeType());
+                                if (r.description() != null) {
+                                    m.put("description", r.description());
+                                }
+                                return m;
+                            })
+                            .toList();
+                    return ResponseEntity.ok(Map.<String, Object>of("resources", resources));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /** Read a resource by URI on a specific MCP server. */
+    @PostMapping("/{serverName}/resources/read")
+    public ResponseEntity<Map<String, Object>> readResource(
+            @PathVariable String serverName,
+            @RequestBody Map<String, String> body,
+            @RequestHeader Map<String, String> headers) {
+
+        return registry.getResourceProvider(serverName).map(provider -> {
+            String uri = body.get("uri");
+            if (uri == null || uri.isBlank()) {
+                return ResponseEntity.badRequest().<Map<String, Object>>body(
+                        Map.of("error", "Missing 'uri' in request body"));
+            }
+
+            TenantContext tenant = null;
+            if (tenantResolver != null) {
+                tenant = tenantResolver.resolve(headers).orElse(null);
+            }
+            if (tenant != null) {
+                TenantContextHolder.set(tenant);
+            }
+
+            try {
+                return provider.read(uri, tenant)
+                        .map(content -> ResponseEntity.ok(Map.<String, Object>of(
+                                "uri", content.uri(),
+                                "mimeType", content.mimeType(),
+                                "text", content.text())))
+                        .orElse(ResponseEntity.notFound().build());
             } finally {
                 TenantContextHolder.clear();
             }

@@ -291,6 +291,7 @@ Adapters are discovered via Spring component scanning and registered in a `Chann
 | Web UI    | WebSocket `/ws/session/{id}`                     | WebSocket                | JWT / session  | `jaiclaw-gateway` (built-in)|
 | REST API  | `POST /api/chat`                                 | JSON response            | API key / JWT  | `jaiclaw-gateway` (built-in)|
 | MCP       | `POST /mcp/{server}/tools/{tool}`                | JSON response            | API key / JWT  | `jaiclaw-gateway` (built-in)|
+| MCP Res   | `GET /mcp/{server}/resources` + `POST .../read`  | JSON response            | API key / JWT  | `jaiclaw-gateway` (built-in)|
 | MCP SSE   | `GET /mcp/{server}/sse` + `POST /jsonrpc`        | JSON-RPC 2.0 / SSE       | API key / JWT  | `jaiclaw-gateway` (built-in)|
 | MCP stdio | stdin JSON-RPC (standalone JAR `--stdio`)         | stdout JSON-RPC          | Env vars       | `jaiclaw-messaging` (standalone)|
 
@@ -464,10 +465,12 @@ env:
 | Interactive onboarding wizard    | Done         | `jaiclaw-shell`                |
 | Channel adapter SPI + attachments| Done         | `jaiclaw-channel-api`          |
 | Gateway (REST + WS + webhooks)   | Done         | `jaiclaw-gateway`              |
-| MCP server hosting               | Done         | `jaiclaw-gateway` (mcp/)       |
+| MCP server hosting (tools)       | Done         | `jaiclaw-gateway` (mcp/)       |
+| MCP resource protocol            | Done         | `jaiclaw-gateway` (mcp/)       |
 | MCP SSE server transport         | Done         | `jaiclaw-gateway` (mcp/transport/server/) |
 | MCP stdio bridge transport       | Done         | `jaiclaw-gateway` (mcp/transport/server/) |
 | MCP channel messaging tools      | Done         | `jaiclaw-messaging`            |
+| MCP docs server (resources)      | Done         | `jaiclaw-docs`                 |
 | Observability (metrics + health) | Done         | `jaiclaw-gateway` (observability/) |
 | Telegram adapter (poll + webhook)| Done         | `jaiclaw-channel-telegram`     |
 | Slack adapter                    | Done         | `jaiclaw-channel-slack`        |
@@ -546,8 +549,8 @@ JaiClawGatewayAutoConfiguration
   ├── gatewayLifecycle        GatewayLifecycle             (starts/stops channel adapters on app lifecycle)
   ├── gatewayController       GatewayController            @RestController — /api/chat, /api/health, /webhook/*
   ├── webSocketSessionHandler WebSocketSessionHandler      (WS /ws/session/{id})
-  ├── mcpServerRegistry       McpServerRegistry            (collects McpToolProvider beans)
-  ├── mcpController           McpController                @ConditionalOnBean(McpServerRegistry) — /mcp/*
+  ├── mcpServerRegistry       McpServerRegistry            (collects McpToolProvider + McpResourceProvider beans)
+  ├── mcpController           McpController                @ConditionalOnBean(McpServerRegistry) — /mcp/* (tools + resources)
   ├── mcpSseServerController  McpSseServerController       @ConditionalOnProperty(jaiclaw.mcp.sse-server.enabled) — /mcp/{server}/sse + /jsonrpc
   ├── gatewayMetrics          GatewayMetrics               (atomic request/error counters)
   └── gatewayHealthIndicator  GatewayHealthIndicator       (UP/DEGRADED based on channel adapter status)

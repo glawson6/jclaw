@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.jaiclaw.core.mcp.McpToolDefinition;
-import io.jaiclaw.core.mcp.McpToolProvider;
-import io.jaiclaw.core.mcp.McpToolResult;
+import io.jaiclaw.core.mcp.*;
 import io.jaiclaw.core.tenant.TenantContext;
 import io.jaiclaw.core.tenant.TenantContextHolder;
 import io.jaiclaw.gateway.mcp.McpServerRegistry;
@@ -24,7 +22,7 @@ import java.util.Optional;
 
 /**
  * Generic SSE server controller that exposes any registered {@link McpToolProvider}
- * via the MCP SSE transport protocol.
+ * and/or {@link McpResourceProvider} via the MCP SSE transport protocol.
  *
  * <p>Endpoints:
  * <ul>
@@ -58,8 +56,7 @@ public class McpSseServerController {
      */
     @GetMapping(value = "/{serverName}/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sseConnect(@PathVariable String serverName) {
-        Optional<McpToolProvider> provider = registry.get(serverName);
-        if (provider.isEmpty()) {
+        if (!registry.hasToolProvider(serverName) && !registry.hasResourceProvider(serverName)) {
             throw new IllegalArgumentException("Unknown MCP server: " + serverName);
         }
 
@@ -77,7 +74,8 @@ public class McpSseServerController {
     }
 
     /**
-     * JSON-RPC 2.0 endpoint — handles initialize, tools/list, tools/call, and notifications.
+     * JSON-RPC 2.0 endpoint — handles initialize, tools/list, tools/call,
+     * resources/list, resources/read, and notifications.
      */
     @PostMapping(value = "/{serverName}/jsonrpc",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -87,12 +85,10 @@ public class McpSseServerController {
             @RequestBody JsonNode request,
             @RequestHeader Map<String, String> headers) {
 
-        Optional<McpToolProvider> providerOpt = registry.get(serverName);
-        if (providerOpt.isEmpty()) {
+        if (!registry.hasToolProvider(serverName) && !registry.hasResourceProvider(serverName)) {
             return ResponseEntity.notFound().build();
         }
 
-        McpToolProvider provider = providerOpt.get();
         String method = request.has("method") ? request.get("method").asText() : "";
         JsonNode id = request.get("id"); // may be null for notifications
         JsonNode params = request.get("params");
@@ -109,9 +105,11 @@ public class McpSseServerController {
 
         try {
             JsonNode result = switch (method) {
-                case "initialize" -> handleInitialize(provider);
-                case "tools/list" -> handleToolsList(provider);
-                case "tools/call" -> handleToolsCall(provider, params, headers);
+                case "initialize" -> handleInitialize(serverName);
+                case "tools/list" -> handleToolsList(serverName);
+                case "tools/call" -> handleToolsCall(serverName, params, headers);
+                case "resources/list" -> handleResourcesList(serverName);
+                case "resources/read" -> handleResourcesRead(serverName, params, headers);
                 default -> throw new UnsupportedOperationException("Unknown method: " + method);
             };
             response.set("result", result);
@@ -131,43 +129,56 @@ public class McpSseServerController {
         return ResponseEntity.ok(response);
     }
 
-    private JsonNode handleInitialize(McpToolProvider provider) {
+    private JsonNode handleInitialize(String serverName) {
         ObjectNode result = objectMapper.createObjectNode();
         result.put("protocolVersion", PROTOCOL_VERSION);
 
         ObjectNode capabilities = objectMapper.createObjectNode();
-        capabilities.putObject("tools");
+        if (registry.hasToolProvider(serverName)) {
+            capabilities.putObject("tools");
+        }
+        if (registry.hasResourceProvider(serverName)) {
+            capabilities.putObject("resources");
+        }
         result.set("capabilities", capabilities);
 
         ObjectNode serverInfo = objectMapper.createObjectNode();
-        serverInfo.put("name", provider.getServerName());
+        serverInfo.put("name", serverName);
         serverInfo.put("version", "0.1.0");
         result.set("serverInfo", serverInfo);
 
         return result;
     }
 
-    private JsonNode handleToolsList(McpToolProvider provider) {
+    private JsonNode handleToolsList(String serverName) {
         ObjectNode result = objectMapper.createObjectNode();
         ArrayNode tools = objectMapper.createArrayNode();
 
-        for (McpToolDefinition tool : provider.getTools()) {
-            ObjectNode toolNode = objectMapper.createObjectNode();
-            toolNode.put("name", tool.name());
-            toolNode.put("description", tool.description());
-            try {
-                toolNode.set("inputSchema", objectMapper.readTree(tool.inputSchema()));
-            } catch (Exception e) {
-                toolNode.put("inputSchema", tool.inputSchema());
+        registry.get(serverName).ifPresent(provider -> {
+            for (McpToolDefinition tool : provider.getTools()) {
+                ObjectNode toolNode = objectMapper.createObjectNode();
+                toolNode.put("name", tool.name());
+                toolNode.put("description", tool.description());
+                try {
+                    toolNode.set("inputSchema", objectMapper.readTree(tool.inputSchema()));
+                } catch (Exception e) {
+                    toolNode.put("inputSchema", tool.inputSchema());
+                }
+                tools.add(toolNode);
             }
-            tools.add(toolNode);
-        }
+        });
 
         result.set("tools", tools);
         return result;
     }
 
-    private JsonNode handleToolsCall(McpToolProvider provider, JsonNode params, Map<String, String> headers) {
+    private JsonNode handleToolsCall(String serverName, JsonNode params, Map<String, String> headers) {
+        Optional<McpToolProvider> providerOpt = registry.get(serverName);
+        if (providerOpt.isEmpty()) {
+            throw new UnsupportedOperationException("No tool provider for server: " + serverName);
+        }
+
+        McpToolProvider provider = providerOpt.get();
         String toolName = params.has("name") ? params.get("name").asText() : "";
         Map<String, Object> args = Map.of();
         if (params.has("arguments")) {
@@ -199,6 +210,66 @@ public class McpSseServerController {
             result.set("content", content);
             result.put("isError", toolResult.isError());
 
+            return result;
+        } finally {
+            if (tenant != null) {
+                TenantContextHolder.clear();
+            }
+        }
+    }
+
+    private JsonNode handleResourcesList(String serverName) {
+        ObjectNode result = objectMapper.createObjectNode();
+        ArrayNode resources = objectMapper.createArrayNode();
+
+        registry.getResourceProvider(serverName).ifPresent(provider -> {
+            for (McpResourceDefinition res : provider.getResources()) {
+                ObjectNode resNode = objectMapper.createObjectNode();
+                resNode.put("uri", res.uri());
+                resNode.put("name", res.name());
+                resNode.put("mimeType", res.mimeType());
+                if (res.description() != null) {
+                    resNode.put("description", res.description());
+                }
+                resources.add(resNode);
+            }
+        });
+
+        result.set("resources", resources);
+        return result;
+    }
+
+    private JsonNode handleResourcesRead(String serverName, JsonNode params, Map<String, String> headers) {
+        Optional<McpResourceProvider> providerOpt = registry.getResourceProvider(serverName);
+        if (providerOpt.isEmpty()) {
+            throw new UnsupportedOperationException("No resource provider for server: " + serverName);
+        }
+
+        String uri = params.has("uri") ? params.get("uri").asText() : "";
+
+        TenantContext tenant = null;
+        if (tenantResolver != null) {
+            tenant = tenantResolver.resolve(headers).orElse(null);
+        }
+        if (tenant != null) {
+            TenantContextHolder.set(tenant);
+        }
+
+        try {
+            Optional<McpResourceContent> contentOpt = providerOpt.get().read(uri, tenant);
+            if (contentOpt.isEmpty()) {
+                throw new IllegalArgumentException("Resource not found: " + uri);
+            }
+
+            McpResourceContent content = contentOpt.get();
+            ObjectNode result = objectMapper.createObjectNode();
+            ArrayNode contents = objectMapper.createArrayNode();
+            ObjectNode entry = objectMapper.createObjectNode();
+            entry.put("uri", content.uri());
+            entry.put("mimeType", content.mimeType());
+            entry.put("text", content.text());
+            contents.add(entry);
+            result.set("contents", contents);
             return result;
         } finally {
             if (tenant != null) {

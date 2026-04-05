@@ -42,5 +42,6 @@
         <module>camel-html-summarizer-telegram</module>
         <module>camel-pdf-filler</module>
         <module>camel-pdf-filler-telegram</module>
+        <module>mcp-docs-server</module>
     </modules>
 </project>

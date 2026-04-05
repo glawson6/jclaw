@@ -5,6 +5,7 @@ import io.jaiclaw.core.artifact.ArtifactStatus;
 import io.jaiclaw.core.artifact.ArtifactStore;
 import io.jaiclaw.core.artifact.StoredArtifact;
 import org.apache.camel.ProducerTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -38,14 +39,17 @@ public class PdfFillerRestController {
     private final ProducerTemplate producerTemplate;
     private final ArtifactStore artifactStore;
     private final TemplateManager templateManager;
+    private final String outbox;
 
     public PdfFillerRestController(
             ProducerTemplate producerTemplate,
             ArtifactStore artifactStore,
-            TemplateManager templateManager) {
+            TemplateManager templateManager,
+            @Value("${app.outbox:target/data/outbox}") String outbox) {
         this.producerTemplate = producerTemplate;
         this.artifactStore = artifactStore;
         this.templateManager = templateManager;
+        this.outbox = outbox;
     }
 
     /**
@@ -83,12 +87,13 @@ public class PdfFillerRestController {
                 ArtifactStatus.PENDING, null, Instant.now(), Map.of());
         artifactStore.save(pending);
 
-        String enriched = "AVAILABLE PDF FORM FIELDS (in document order):\n"
-                + templateManager.getFieldDescriptions()
-                + "\nJSON DATA TO MAP:\n" + jsonBody
-                + "\n\nMap each value from the JSON to the correct PDF field name above.";
+        String templatePath = templateManager.getTemplatePath();
+        String outputPath = outbox + "/" + jobId + ".pdf";
+        String message = "Fill the PDF template at " + templatePath
+                + " with the following data and write the output to "
+                + outputPath + ":\n\n" + jsonBody;
         producerTemplate.sendBodyAndHeader(
-                "seda:jaiclaw-pdf-filler-in", enriched,
+                "seda:jaiclaw-pdf-filler-in", message,
                 CamelMessageConverter.HEADER_PEER_ID, jobId);
 
         return ResponseEntity.accepted()
@@ -107,10 +112,6 @@ public class PdfFillerRestController {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
             headers.setContentDispositionFormData("attachment", artifact.filename());
-            String unmapped = artifact.metadata().get("unmapped");
-            if (unmapped != null) {
-                headers.set("X-Warnings", "Unmapped fields: " + unmapped);
-            }
             return new ResponseEntity<>(artifact.data(), headers, HttpStatus.OK);
         }
 
@@ -119,9 +120,6 @@ public class PdfFillerRestController {
         status.put("status", artifact.status().name());
         if (artifact.statusMessage() != null) {
             status.put("message", artifact.statusMessage());
-        }
-        if (artifact.metadata().containsKey("warnings")) {
-            status.put("warnings", artifact.metadata().get("warnings"));
         }
         return ResponseEntity.ok(status);
     }

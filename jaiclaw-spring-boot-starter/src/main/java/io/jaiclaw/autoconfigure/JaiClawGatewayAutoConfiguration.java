@@ -120,8 +120,11 @@ public class JaiClawGatewayAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public io.jaiclaw.gateway.mcp.McpServerRegistry mcpServerRegistry(
-            List<io.jaiclaw.core.mcp.McpToolProvider> providers) {
-        return new io.jaiclaw.gateway.mcp.McpServerRegistry(providers);
+            ObjectProvider<List<io.jaiclaw.core.mcp.McpToolProvider>> toolProviders,
+            ObjectProvider<List<io.jaiclaw.core.mcp.McpResourceProvider>> resourceProviders) {
+        return new io.jaiclaw.gateway.mcp.McpServerRegistry(
+                toolProviders.getIfAvailable(List::of),
+                resourceProviders.getIfAvailable(List::of));
     }
 
     @Bean

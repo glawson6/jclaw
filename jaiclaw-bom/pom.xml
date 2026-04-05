@@ -12,6 +12,19 @@
     <name>JaiClaw :: BOM</name>
     <description>Bill of Materials for JaiClaw modules</description>
 
+    <distributionManagement>
+        <repository>
+            <id>taptech-repo</id>
+            <name>TapTech Releases</name>
+            <url>${deploy.releases.url}</url>
+        </repository>
+        <snapshotRepository>
+            <id>taptech-repo</id>
+            <name>TapTech Snapshots</name>
+            <url>${deploy.snapshots.url}</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -326,6 +339,11 @@
             <dependency>
                 <groupId>io.jaiclaw</groupId>
                 <artifactId>jaiclaw-embabel-delegate</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jaiclaw</groupId>
+                <artifactId>jaiclaw-docs</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

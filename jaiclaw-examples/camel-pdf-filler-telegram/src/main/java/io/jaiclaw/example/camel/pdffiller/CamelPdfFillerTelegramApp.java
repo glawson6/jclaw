@@ -2,7 +2,6 @@ package io.jaiclaw.example.camel.pdffiller;
 
 import io.jaiclaw.core.artifact.ArtifactStore;
 import io.jaiclaw.core.artifact.InMemoryArtifactStore;
-import io.jaiclaw.documents.PdfFormFiller;
 import io.jaiclaw.documents.PdfFormReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +15,10 @@ import org.springframework.core.env.Environment;
 /**
  * Human-in-the-loop PDF form-filling pipeline with Telegram integration.
  *
- * <p>Same as the automated pipeline, but when the LLM can't confidently map
- * all JSON fields, it asks the user on Telegram to resolve ambiguities.
+ * <p>Uses the {@code pdf-form-filler} skill and tools ({@code pdf_read_fields},
+ * {@code pdf_fill_form}) for autonomous form filling. The stateful Telegram
+ * channel allows the agent to ask clarification questions when field mappings
+ * are ambiguous.
  */
 @SpringBootApplication
 public class CamelPdfFillerTelegramApp {
@@ -36,11 +37,6 @@ public class CamelPdfFillerTelegramApp {
     @Bean
     PdfFormReader pdfFormReader() {
         return new PdfFormReader();
-    }
-
-    @Bean
-    PdfFormFiller pdfFormFiller() {
-        return new PdfFormFiller();
     }
 
     @Bean

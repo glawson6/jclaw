@@ -41,6 +41,9 @@ jaiclaw:
 
 # ── Spring configuration ─────────────────────────────────────────
 spring:
+  autoconfigure:
+    exclude:
+      - com.embabel.agent.autoconfigure.platform.AgentPlatformAutoConfiguration
   application:
     name: jaiclaw-system-monitor
   datasource:

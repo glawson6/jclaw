@@ -21,4 +21,5 @@ public final class ToolCatalog {
     public static final String SECTION_INVOICE = "Invoice";
     public static final String SECTION_CALENDAR = "Calendar";
     public static final String SECTION_COACH = "Coach";
+    public static final String SECTION_DOCUMENTS = "Documents";
 }

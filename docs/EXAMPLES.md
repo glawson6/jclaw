@@ -18,6 +18,7 @@
 | 8 | [meeting-assistant](../jaiclaw-examples/meeting-assistant/) | Voice | Voice, Identity, Slack | Meeting transcription and summary |
 | 9 | [helpdesk-bot](../jaiclaw-examples/helpdesk-bot/) | Security | Gateway, Security | Multi-tenant support bot |
 | 10 | [content-pipeline](../jaiclaw-examples/content-pipeline/) | Media | Media, Documents, Plugin | Multi-modal content analysis |
+| 11 | [mcp-docs-server](../jaiclaw-examples/mcp-docs-server/) | MCP | Docs, Gateway | MCP server exposing JaiClaw docs as resources with search |
 
 ## Quick Start
 

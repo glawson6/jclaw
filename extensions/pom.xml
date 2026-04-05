@@ -39,5 +39,6 @@
         <module>jaiclaw-voice-call</module>
         <module>jaiclaw-camel</module>
         <module>jaiclaw-embabel-delegate</module>
+        <module>jaiclaw-docs</module>
     </modules>
 </project>

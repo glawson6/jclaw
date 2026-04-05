@@ -215,6 +215,11 @@
             </dependency>
             <dependency>
                 <groupId>io.jaiclaw</groupId>
+                <artifactId>jaiclaw-docs</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jaiclaw</groupId>
                 <artifactId>jaiclaw-voice</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -471,7 +476,7 @@
         </repository>
         <repository>
             <id>taptech-nexus</id>
-            <url>http://tooling.taptech.net:8081/repository/maven-public/</url>
+            <url>https://tooling.taptech.net/repository/maven-public/</url>
             <releases>
                 <enabled>true</enabled>
             </releases>
@@ -497,6 +502,19 @@
             </snapshots>
         </repository>
     </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>taptech-repo</id>
+            <name>TapTech Releases</name>
+            <url>${deploy.releases.url}</url>
+        </repository>
+        <snapshotRepository>
+            <id>taptech-repo</id>
+            <name>TapTech Snapshots</name>
+            <url>${deploy.snapshots.url}</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <build>
         <pluginManagement>

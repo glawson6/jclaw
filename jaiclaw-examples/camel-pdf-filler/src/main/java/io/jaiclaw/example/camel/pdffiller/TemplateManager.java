@@ -10,6 +10,7 @@ import org.springframework.core.io.Resource;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -36,6 +37,7 @@ public class TemplateManager {
     private final Resource templateResource;
     private byte[] templateBytes;
     private List<PdfFormField> fields;
+    private String templatePath;
 
     public TemplateManager(
             PdfFormReader pdfFormReader,
@@ -53,6 +55,18 @@ public class TemplateManager {
 
         this.templateBytes = templateResource.getInputStream().readAllBytes();
         this.fields = pdfFormReader.readFields(templateBytes);
+
+        // Resolve the absolute filesystem path for the agent's tool calls
+        try {
+            this.templatePath = templateResource.getFile().getAbsolutePath();
+        } catch (IOException e) {
+            // Classpath resources can't be resolved to a File — extract to temp
+            Path tempFile = Path.of(System.getProperty("java.io.tmpdir"), "jaiclaw-pdf-template.pdf");
+            java.nio.file.Files.write(tempFile, templateBytes);
+            this.templatePath = tempFile.toAbsolutePath().toString();
+            log.info("Classpath template extracted to: {}", templatePath);
+        }
+
         log.info("Loaded PDF template ({} bytes, {} form fields): {}",
                 templateBytes.length, fields.size(),
                 fields.stream().map(PdfFormField::name).toList());
@@ -67,26 +81,11 @@ public class TemplateManager {
     }
 
     /**
-     * Returns a human-readable description of each form field, suitable for
-     * including in the LLM prompt so the model knows what fields are available.
-     *
-     * <p>Fields are listed by their exact PDF AcroForm name. For forms with
-     * duplicate-style field names (e.g. {@code City}, {@code City_2}, {@code City_3}),
-     * the listing preserves the original order from the PDF which corresponds to
-     * the visual top-to-bottom, left-to-right layout of the form.
+     * Returns the absolute filesystem path to the template PDF, suitable for
+     * passing to the agent so it can use {@code pdf_read_fields} and
+     * {@code pdf_fill_form} tools.
      */
-    public String getFieldDescriptions() {
-        StringBuilder sb = new StringBuilder();
-        for (PdfFormField field : fields) {
-            sb.append("- \"").append(field.name()).append("\" (").append(field.type());
-            if (!field.options().isEmpty()) {
-                sb.append(", options: ").append(field.options());
-            }
-            if (field.currentValue() != null && !field.currentValue().isEmpty()) {
-                sb.append(", current: \"").append(field.currentValue()).append("\"");
-            }
-            sb.append(")\n");
-        }
-        return sb.toString();
+    public String getTemplatePath() {
+        return templatePath;
     }
 }

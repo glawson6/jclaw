@@ -2,7 +2,6 @@ package io.jaiclaw.example.camel.pdffiller;
 
 import io.jaiclaw.core.artifact.ArtifactStore;
 import io.jaiclaw.core.artifact.InMemoryArtifactStore;
-import io.jaiclaw.documents.PdfFormFiller;
 import io.jaiclaw.documents.PdfFormReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +15,11 @@ import org.springframework.core.env.Environment;
 /**
  * Automated PDF form-filling pipeline.
  *
- * <p>JSON input (file watcher or REST API) is processed by an LLM that maps
- * JSON keys to PDF form field names. The filled PDF is stored in an ArtifactStore
- * and written to the outbox directory.
+ * <p>JSON input (file watcher or REST API) is sent to the agent, which uses
+ * the {@code pdf-form-filler} skill and tools ({@code pdf_read_fields},
+ * {@code pdf_fill_form}) to inspect the template, map fields, and produce
+ * the filled PDF. The result is stored in an ArtifactStore and written to
+ * the outbox directory.
  */
 @SpringBootApplication
 public class CamelPdfFillerApp {
@@ -37,11 +38,6 @@ public class CamelPdfFillerApp {
     @Bean
     PdfFormReader pdfFormReader() {
         return new PdfFormReader();
-    }
-
-    @Bean
-    PdfFormFiller pdfFormFiller() {
-        return new PdfFormFiller();
     }
 
     @Bean

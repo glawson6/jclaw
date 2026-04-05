@@ -4,20 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.jaiclaw.core.mcp.McpToolDefinition;
-import io.jaiclaw.core.mcp.McpToolProvider;
-import io.jaiclaw.core.mcp.McpToolResult;
+import io.jaiclaw.core.mcp.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Reusable server-side stdio bridge for the MCP protocol.
  * Reads JSON-RPC 2.0 requests line-by-line from stdin,
- * dispatches to an {@link McpToolProvider}, and writes responses to stdout.
+ * dispatches to an {@link McpToolProvider} and/or {@link McpResourceProvider},
+ * and writes responses to stdout.
  *
  * <p>This is the server-side counterpart to {@code StdioMcpToolProvider} (client-side).
  */
@@ -26,18 +26,32 @@ public class McpStdioBridge {
     private static final Logger log = LoggerFactory.getLogger(McpStdioBridge.class);
     private static final String PROTOCOL_VERSION = "2024-11-05";
 
-    private final McpToolProvider provider;
+    private final McpToolProvider toolProvider;
+    private final McpResourceProvider resourceProvider;
     private final ObjectMapper objectMapper;
     private final BufferedReader reader;
     private final BufferedWriter writer;
 
+    /** Backward-compatible constructor — tools only. */
     public McpStdioBridge(McpToolProvider provider, ObjectMapper objectMapper) {
-        this(provider, objectMapper, System.in, System.out);
+        this(provider, null, objectMapper, System.in, System.out);
     }
 
     public McpStdioBridge(McpToolProvider provider, ObjectMapper objectMapper,
                           InputStream inputStream, OutputStream outputStream) {
-        this.provider = provider;
+        this(provider, null, objectMapper, inputStream, outputStream);
+    }
+
+    /** Full constructor — tools and/or resources. */
+    public McpStdioBridge(McpToolProvider toolProvider, McpResourceProvider resourceProvider,
+                          ObjectMapper objectMapper) {
+        this(toolProvider, resourceProvider, objectMapper, System.in, System.out);
+    }
+
+    public McpStdioBridge(McpToolProvider toolProvider, McpResourceProvider resourceProvider,
+                          ObjectMapper objectMapper, InputStream inputStream, OutputStream outputStream) {
+        this.toolProvider = toolProvider;
+        this.resourceProvider = resourceProvider;
         this.objectMapper = objectMapper;
         this.reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
         this.writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -47,7 +61,9 @@ public class McpStdioBridge {
      * Run the stdio bridge. Blocks until EOF on stdin.
      */
     public void run() throws IOException {
-        log.info("MCP stdio bridge started for server: {}", provider.getServerName());
+        String serverName = toolProvider != null ? toolProvider.getServerName()
+                : resourceProvider != null ? resourceProvider.getServerName() : "unknown";
+        log.info("MCP stdio bridge started for server: {}", serverName);
 
         String line;
         while ((line = reader.readLine()) != null) {
@@ -74,6 +90,8 @@ public class McpStdioBridge {
                         case "initialize" -> handleInitialize();
                         case "tools/list" -> handleToolsList();
                         case "tools/call" -> handleToolsCall(params);
+                        case "resources/list" -> handleResourcesList();
+                        case "resources/read" -> handleResourcesRead(params);
                         default -> throw new UnsupportedOperationException("Unknown method: " + method);
                     };
                     response.set("result", result);
@@ -106,11 +124,18 @@ public class McpStdioBridge {
         result.put("protocolVersion", PROTOCOL_VERSION);
 
         ObjectNode capabilities = objectMapper.createObjectNode();
-        capabilities.putObject("tools");
+        if (toolProvider != null) {
+            capabilities.putObject("tools");
+        }
+        if (resourceProvider != null) {
+            capabilities.putObject("resources");
+        }
         result.set("capabilities", capabilities);
 
         ObjectNode serverInfo = objectMapper.createObjectNode();
-        serverInfo.put("name", provider.getServerName());
+        String name = toolProvider != null ? toolProvider.getServerName()
+                : resourceProvider.getServerName();
+        serverInfo.put("name", name);
         serverInfo.put("version", "0.1.0");
         result.set("serverInfo", serverInfo);
 
@@ -121,16 +146,18 @@ public class McpStdioBridge {
         ObjectNode result = objectMapper.createObjectNode();
         ArrayNode tools = objectMapper.createArrayNode();
 
-        for (McpToolDefinition tool : provider.getTools()) {
-            ObjectNode toolNode = objectMapper.createObjectNode();
-            toolNode.put("name", tool.name());
-            toolNode.put("description", tool.description());
-            try {
-                toolNode.set("inputSchema", objectMapper.readTree(tool.inputSchema()));
-            } catch (Exception e) {
-                toolNode.put("inputSchema", tool.inputSchema());
+        if (toolProvider != null) {
+            for (McpToolDefinition tool : toolProvider.getTools()) {
+                ObjectNode toolNode = objectMapper.createObjectNode();
+                toolNode.put("name", tool.name());
+                toolNode.put("description", tool.description());
+                try {
+                    toolNode.set("inputSchema", objectMapper.readTree(tool.inputSchema()));
+                } catch (Exception e) {
+                    toolNode.put("inputSchema", tool.inputSchema());
+                }
+                tools.add(toolNode);
             }
-            tools.add(toolNode);
         }
 
         result.set("tools", tools);
@@ -138,6 +165,10 @@ public class McpStdioBridge {
     }
 
     private JsonNode handleToolsCall(JsonNode params) {
+        if (toolProvider == null) {
+            throw new UnsupportedOperationException("No tool provider configured");
+        }
+
         String toolName = params.has("name") ? params.get("name").asText() : "";
         Map<String, Object> args = Map.of();
         if (params.has("arguments")) {
@@ -149,7 +180,7 @@ public class McpStdioBridge {
             }
         }
 
-        McpToolResult toolResult = provider.execute(toolName, args, null);
+        McpToolResult toolResult = toolProvider.execute(toolName, args, null);
 
         ObjectNode result = objectMapper.createObjectNode();
         ArrayNode content = objectMapper.createArrayNode();
@@ -160,6 +191,51 @@ public class McpStdioBridge {
         result.set("content", content);
         result.put("isError", toolResult.isError());
 
+        return result;
+    }
+
+    private JsonNode handleResourcesList() {
+        ObjectNode result = objectMapper.createObjectNode();
+        ArrayNode resources = objectMapper.createArrayNode();
+
+        if (resourceProvider != null) {
+            for (McpResourceDefinition res : resourceProvider.getResources()) {
+                ObjectNode resNode = objectMapper.createObjectNode();
+                resNode.put("uri", res.uri());
+                resNode.put("name", res.name());
+                resNode.put("mimeType", res.mimeType());
+                if (res.description() != null) {
+                    resNode.put("description", res.description());
+                }
+                resources.add(resNode);
+            }
+        }
+
+        result.set("resources", resources);
+        return result;
+    }
+
+    private JsonNode handleResourcesRead(JsonNode params) {
+        if (resourceProvider == null) {
+            throw new UnsupportedOperationException("No resource provider configured");
+        }
+
+        String uri = params.has("uri") ? params.get("uri").asText() : "";
+        Optional<McpResourceContent> contentOpt = resourceProvider.read(uri, null);
+
+        if (contentOpt.isEmpty()) {
+            throw new IllegalArgumentException("Resource not found: " + uri);
+        }
+
+        McpResourceContent content = contentOpt.get();
+        ObjectNode result = objectMapper.createObjectNode();
+        ArrayNode contents = objectMapper.createArrayNode();
+        ObjectNode entry = objectMapper.createObjectNode();
+        entry.put("uri", content.uri());
+        entry.put("mimeType", content.mimeType());
+        entry.put("text", content.text());
+        contents.add(entry);
+        result.set("contents", contents);
         return result;
     }
 }
