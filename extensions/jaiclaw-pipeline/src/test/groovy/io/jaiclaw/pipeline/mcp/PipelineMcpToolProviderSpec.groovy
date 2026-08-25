@@ -157,4 +157,48 @@ class PipelineMcpToolProviderSpec extends Specification {
         then:
         r.isError()
     }
+
+    def "pipeline_trigger with mismatched tenantId is rejected (SEV-003)"() {
+        given:
+        def callerTenant = new io.jaiclaw.core.tenant.DefaultTenantContext("tenant-A", "A")
+
+        when:
+        McpToolResult r = provider.execute("pipeline_trigger",
+                [pipelineId: "p1", tenantId: "tenant-B"], callerTenant)
+
+        then:
+        r.isError()
+        r.content().contains("cross-tenant access denied")
+        0 * gateway.trigger(_, _, _)
+        0 * gateway.trigger(_, _, _, _)
+    }
+
+    def "pipeline_trigger_sync with mismatched tenantId is rejected (SEV-003)"() {
+        given:
+        def callerTenant = new io.jaiclaw.core.tenant.DefaultTenantContext("tenant-A", "A")
+
+        when:
+        McpToolResult r = provider.execute("pipeline_trigger_sync",
+                [pipelineId: "p1", tenantId: "tenant-B"], callerTenant)
+
+        then:
+        r.isError()
+        r.content().contains("cross-tenant access denied")
+        0 * gateway.triggerAndAwait(_, _, _, _, _)
+    }
+
+    def "pipeline_trigger with matching tenantId is accepted"() {
+        given:
+        def callerTenant = new io.jaiclaw.core.tenant.DefaultTenantContext("tenant-A", "A")
+        def handle = new PipelineExecutionHandle("exec-1", "p1", Instant.now())
+        gateway.trigger("p1", "", "tenant-A") >> handle
+
+        when:
+        McpToolResult r = provider.execute("pipeline_trigger",
+                [pipelineId: "p1", tenantId: "tenant-A"], callerTenant)
+
+        then:
+        !r.isError()
+        r.content().contains("exec-1")
+    }
 }

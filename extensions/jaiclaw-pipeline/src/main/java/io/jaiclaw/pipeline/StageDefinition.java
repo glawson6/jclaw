@@ -67,8 +67,12 @@ public record StageDefinition(
      * Backward-compatible 11-arg constructor — omits {@code config},
      * which defaults to an empty map. Retained so existing per-file
      * YAML fixtures and Spock specs compile unchanged.
+     *
+     * <p>Private so Spring Boot 4's record binder sees only the canonical
+     * 12-arg constructor. Groovy tests may still invoke this via reflection.
      */
-    public StageDefinition(
+    @SuppressWarnings("unused")
+    private StageDefinition(
             String name,
             StageType type,
             String bean,
@@ -89,8 +93,12 @@ public record StageDefinition(
      * 12-arg form with {@code runtime=NATIVE}, {@code embabelWorkflow=null},
      * and an empty {@code config} map. Existing callers (Spock specs,
      * hand-rolled stages) continue to compile unchanged.
+     *
+     * <p>Private so Spring Boot 4's record binder sees only the canonical
+     * 12-arg constructor. Groovy tests may still invoke this via reflection.
      */
-    public StageDefinition(
+    @SuppressWarnings("unused")
+    private StageDefinition(
             String name,
             StageType type,
             String bean,
@@ -102,6 +110,55 @@ public record StageDefinition(
             TransportConfig transport) {
         this(name, type, bean, agentId, systemPrompt, channelId, uri, timeout, transport,
                 StageRuntime.NATIVE, null, Map.of());
+    }
+
+    /**
+     * Named-field builder for {@link StageDefinition}. Prefer this over the
+     * 12-arg canonical constructor at any call site — new fields on this
+     * record are additive and a positional constructor call is fragile
+     * against reordering / insertions. Records' canonical ctors are exempt
+     * from the "no >3-arg constructors" rule because the arg count is
+     * record identity, but callers should still use the builder.
+     */
+    public static Builder builder(String name) {
+        return new Builder(name);
+    }
+
+    public static final class Builder {
+        private final String name;
+        private StageType type;
+        private String bean;
+        private String agentId;
+        private String systemPrompt;
+        private String channelId;
+        private String uri;
+        private Duration timeout;
+        private TransportConfig transport;
+        private StageRuntime runtime;
+        private String embabelWorkflow;
+        private Map<String, String> config = Map.of();
+
+        private Builder(String name) {
+            this.name = name;
+        }
+
+        public Builder type(StageType type)                       { this.type = type; return this; }
+        public Builder bean(String bean)                          { this.bean = bean; return this; }
+        public Builder agentId(String agentId)                    { this.agentId = agentId; return this; }
+        public Builder systemPrompt(String systemPrompt)          { this.systemPrompt = systemPrompt; return this; }
+        public Builder channelId(String channelId)                { this.channelId = channelId; return this; }
+        public Builder uri(String uri)                            { this.uri = uri; return this; }
+        public Builder timeout(Duration timeout)                  { this.timeout = timeout; return this; }
+        public Builder transport(TransportConfig transport)       { this.transport = transport; return this; }
+        public Builder runtime(StageRuntime runtime)              { this.runtime = runtime; return this; }
+        public Builder embabelWorkflow(String embabelWorkflow)    { this.embabelWorkflow = embabelWorkflow; return this; }
+        public Builder config(Map<String, String> config)         { this.config = config == null ? Map.of() : config; return this; }
+
+        public StageDefinition build() {
+            return new StageDefinition(
+                    name, type, bean, agentId, systemPrompt, channelId, uri, timeout,
+                    transport, runtime, embabelWorkflow, config);
+        }
     }
 
     /**

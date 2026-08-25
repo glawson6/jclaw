@@ -101,6 +101,15 @@
         -->
         <ossIndex.user></ossIndex.user>
         <ossIndex.token></ossIndex.token>
+        <!--
+            NVD API key — required by dependency-check-maven since
+            October 2023. Without it the plugin aborts on the very
+            first artifact with `NvdApiException: Invalid API Key`.
+            Request a free key at https://nvd.nist.gov/developers/request-an-api-key
+            and supply at invocation time via -Dnvd.api.key=... or
+            the NVD_API_KEY env var in CI.
+        -->
+        <nvd.api.key></nvd.api.key>
     </properties>
 
     <dependencyManagement>
@@ -873,6 +882,16 @@
                         <ossIndexUsername>${ossIndex.user}</ossIndexUsername>
                         <ossIndexPassword>${ossIndex.token}</ossIndexPassword>
                         <ossIndexWarnOnlyOnRemoteErrors>true</ossIndexWarnOnlyOnRemoteErrors>
+                        <!--
+                            NVD API key — see property definition and
+                            https://nvd.nist.gov/developers/request-an-api-key.
+                            Empty default lets the plugin fall back to
+                            unauthenticated NVD access (rate-limited, prone
+                            to `Invalid API Key` errors on any real workload).
+                            Set NVD_API_KEY in CI and invoke with
+                            -Dnvd.api.key="${NVD_API_KEY}".
+                        -->
+                        <nvdApiKey>${nvd.api.key}</nvdApiKey>
                     </configuration>
                 </plugin>
                 <!--

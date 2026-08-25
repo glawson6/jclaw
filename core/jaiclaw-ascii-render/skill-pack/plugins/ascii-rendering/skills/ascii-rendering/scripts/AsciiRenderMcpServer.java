@@ -1,8 +1,7 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
 //JAVA 21
-//DEPS io.jaiclaw:jaiclaw-ascii-render:1.0.1-SNAPSHOT
-//DEPS tools.jackson.core:jackson-databind:2.18.2
-//REPOS taptech=https://tooling.taptech.net/repository/maven-public/
+//DEPS io.jaiclaw:jaiclaw-ascii-render:1.1.0
+//DEPS tools.jackson.core:jackson-databind:3.1.4
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -37,7 +36,7 @@ public class AsciiRenderMcpServer {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String PROTOCOL_VERSION = "2024-11-05";
     private static final String SERVER_NAME = "jaiclaw-ascii-render";
-    private static final String SERVER_VERSION = "1.0.1";
+    private static final String SERVER_VERSION = "1.1.0";
 
     public static void main(String[] args) throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));

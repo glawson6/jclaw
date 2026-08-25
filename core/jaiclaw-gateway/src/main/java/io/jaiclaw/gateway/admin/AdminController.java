@@ -9,6 +9,7 @@ import io.jaiclaw.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -20,9 +21,16 @@ import java.util.Optional;
  * Admin REST controller for operational management of the JaiClaw gateway.
  * Provides endpoints for session management, channel status, tool listing,
  * and runtime metrics. Conditional on {@code jaiclaw.admin.enabled=true}.
+ *
+ * <p>Class-level {@code @PreAuthorize("@adminAuthzExpressions.admin()")}
+ * gates every endpoint. The default role config is blank (any authenticated
+ * caller passes) — adopters opt into real gating by setting
+ * {@code jaiclaw.gateway.admin.roles.admin=JAICLAW_ADMIN} (or their real
+ * role). See {@link AdminAuthzProperties}.
  */
 @RestController
 @RequestMapping("/admin")
+@PreAuthorize("@adminAuthzExpressions.admin()")
 public class AdminController {
 
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);

@@ -48,6 +48,18 @@
             <artifactId>spring-webflux</artifactId>
             <optional>true</optional>
         </dependency>
+        <!--
+            Spring Security core — required so @PreAuthorize on AdminController
+            (and the AdminAuthzExpressions bean it references) compiles.
+            Marked optional so apps that don't want Spring Security don't
+            transitively inherit it; the annotation is silently inert when
+            the security starter isn't on the runtime classpath.
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>io.projectreactor.netty</groupId>
             <artifactId>reactor-netty-http</artifactId>

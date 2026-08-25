@@ -2,6 +2,8 @@ package io.jaiclaw.core.tenant;
 
 import io.jaiclaw.core.api.Stable;
 
+import java.util.function.Supplier;
+
 /**
  * Thread-local holder for the current {@link TenantContext}.
  * <p>
@@ -54,5 +56,37 @@ public final class TenantContextHolder {
      */
     public static void clear() {
         CONTEXT.remove();
+    }
+
+    /**
+     * Run {@code action} with {@code ctx} set on the current thread, restoring
+     * the prior context (or clearing it if none was set) when the action returns.
+     * Prefer this over manual {@link #set}/{@link #clear} pairs — the naive
+     * {@code set → try → clear} pattern clobbers an outer caller's context.
+     */
+    public static <T> T withTenant(TenantContext ctx, Supplier<T> action) {
+        TenantContext prior = CONTEXT.get();
+        if (ctx != null) {
+            CONTEXT.set(ctx);
+        }
+        try {
+            return action.get();
+        } finally {
+            if (prior != null) {
+                CONTEXT.set(prior);
+            } else {
+                CONTEXT.remove();
+            }
+        }
+    }
+
+    /**
+     * Runnable overload of {@link #withTenant(TenantContext, Supplier)}.
+     */
+    public static void withTenant(TenantContext ctx, Runnable action) {
+        withTenant(ctx, () -> {
+            action.run();
+            return null;
+        });
     }
 }

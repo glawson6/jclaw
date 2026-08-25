@@ -84,16 +84,19 @@ public record PipelineAuthoringProperties(
 
     /**
      * Spring Security authority names mapped onto the four Studio roles.
-     * Absent authority means no method-level enforcement — the endpoint
-     * still requires an authenticated principal (per the app's chain)
-     * but any authenticated caller may invoke it.
+     * <p>
+     * Absent (blank) authority means no method-level enforcement — the
+     * endpoint still requires an authenticated principal (per the app's
+     * chain) but any authenticated caller may invoke it. The defaults
+     * are intentionally blank so that turning on {@code @EnableMethodSecurity}
+     * does not break existing api-key deployments whose principals have
+     * no granted authorities. Adopters opt in to role gating by setting
+     * {@code jaiclaw.pipeline.authoring.roles.deployer=ROLE_PIPELINE_DEPLOYER}
+     * (etc.) and ensuring their auth filter grants the corresponding
+     * authority.
      */
     public record Roles(String viewer, String author, String deployer, String runner) {
-        public static final Roles DEFAULT = new Roles(
-                "ROLE_PIPELINE_VIEWER",
-                "ROLE_PIPELINE_AUTHOR",
-                "ROLE_PIPELINE_DEPLOYER",
-                "ROLE_PIPELINE_RUNNER");
+        public static final Roles DEFAULT = new Roles("", "", "", "");
     }
 
     /**

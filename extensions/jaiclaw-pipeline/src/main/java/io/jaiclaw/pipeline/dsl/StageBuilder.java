@@ -211,8 +211,17 @@ public class StageBuilder {
             }
             transport = new StageDefinition.TransportConfig(transportUri, auth);
         }
-        return new StageDefinition(
-                name, type, bean, agentId, systemPrompt, channelId, uri, timeout, transport,
-                runtime, embabelWorkflow);
+        return StageDefinition.builder(name)
+                .type(type)
+                .bean(bean)
+                .agentId(agentId)
+                .systemPrompt(systemPrompt)
+                .channelId(channelId)
+                .uri(uri)
+                .timeout(timeout)
+                .transport(transport)
+                .runtime(runtime)
+                .embabelWorkflow(embabelWorkflow)
+                .build();
     }
 }

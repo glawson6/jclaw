@@ -13,7 +13,10 @@ import io.jaiclaw.calendar.util.DateParsingUtil;
 import io.jaiclaw.core.mcp.McpToolDefinition;
 import io.jaiclaw.core.mcp.McpToolProvider;
 import io.jaiclaw.core.mcp.McpToolResult;
+import io.jaiclaw.core.tenant.CrossTenantAccessException;
+import io.jaiclaw.core.tenant.TenantArgResolver;
 import io.jaiclaw.core.tenant.TenantContext;
+import io.jaiclaw.core.tenant.TenantContextHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,29 +72,34 @@ public class CalendarMcpToolProvider implements McpToolProvider {
 
     @Override
     public McpToolResult execute(String toolName, Map<String, Object> args, TenantContext tenant) {
-        try {
-            return switch (toolName) {
-                case "create_event" -> handleCreateEvent(args);
-                case "list_events" -> handleListEvents(args);
-                case "update_event" -> handleUpdateEvent(args);
-                case "delete_event" -> handleDeleteEvent(args);
-                case "get_available_slots" -> handleGetAvailableSlots(args);
-                case "list_calendars" -> handleListCalendars(args);
-                case "create_calendar" -> handleCreateCalendar(args);
-                case "time_lookup" -> handleTimeLookup(args);
-                default -> McpToolResult.error("Unknown tool: " + toolName);
-            };
-        } catch (Exception e) {
-            log.error("MCP tool execution failed: {}", toolName, e);
-            return McpToolResult.error("Tool execution failed: " + e.getMessage());
-        }
+        return TenantContextHolder.withTenant(tenant, () -> {
+            try {
+                return switch (toolName) {
+                    case "create_event" -> handleCreateEvent(args, tenant);
+                    case "list_events" -> handleListEvents(args, tenant);
+                    case "update_event" -> handleUpdateEvent(args, tenant);
+                    case "delete_event" -> handleDeleteEvent(args, tenant);
+                    case "get_available_slots" -> handleGetAvailableSlots(args);
+                    case "list_calendars" -> handleListCalendars(args, tenant);
+                    case "create_calendar" -> handleCreateCalendar(args, tenant);
+                    case "time_lookup" -> handleTimeLookup(args);
+                    default -> McpToolResult.error("Unknown tool: " + toolName);
+                };
+            } catch (CrossTenantAccessException e) {
+                log.warn("MCP tool '{}' rejected: {}", toolName, e.getMessage());
+                return McpToolResult.error("cross-tenant access denied");
+            } catch (Exception e) {
+                log.error("MCP tool execution failed: {}", toolName, e);
+                return McpToolResult.error("Tool execution failed: " + e.getMessage());
+            }
+        });
     }
 
-    private McpToolResult handleCreateEvent(Map<String, Object> args) throws Exception {
+    private McpToolResult handleCreateEvent(Map<String, Object> args, TenantContext tenant) throws Exception {
         String title = requireString(args, "title");
         String email = requireString(args, "email");
         String organizer = requireString(args, "organizer");
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         String calendarId = stringOrDefault(args, "calendarId", properties.defaultCalendarName());
         String description = stringOrDefault(args, "description", "");
         String location = stringOrDefault(args, "location", "");
@@ -126,8 +134,8 @@ public class CalendarMcpToolProvider implements McpToolProvider {
         }
     }
 
-    private McpToolResult handleListEvents(Map<String, Object> args) throws Exception {
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+    private McpToolResult handleListEvents(Map<String, Object> args, TenantContext tenant) throws Exception {
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         String calendarId = stringOrDefault(args, "calendarId", properties.defaultCalendarName());
         Instant start = DateParsingUtil.parseStartDate(requireString(args, "startDate"));
         Instant end = DateParsingUtil.parseEndDate(requireString(args, "endDate"));
@@ -138,9 +146,9 @@ public class CalendarMcpToolProvider implements McpToolProvider {
         return McpToolResult.success(toJson(Map.of("success", true, "events", events, "count", events.size())));
     }
 
-    private McpToolResult handleUpdateEvent(Map<String, Object> args) throws Exception {
+    private McpToolResult handleUpdateEvent(Map<String, Object> args, TenantContext tenant) throws Exception {
         String eventId = requireString(args, "eventId");
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         String calendarId = stringOrDefault(args, "calendarId", properties.defaultCalendarName());
         Map<String, Object> updates = new HashMap<>();
         for (String field : new String[]{"title", "description", "startTime", "endTime", "location", "status"}) {
@@ -153,9 +161,9 @@ public class CalendarMcpToolProvider implements McpToolProvider {
         return McpToolResult.success(toJson(Map.of("success", true, "event", updated)));
     }
 
-    private McpToolResult handleDeleteEvent(Map<String, Object> args) throws Exception {
+    private McpToolResult handleDeleteEvent(Map<String, Object> args, TenantContext tenant) throws Exception {
         String eventId = requireString(args, "eventId");
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         String calendarId = stringOrDefault(args, "calendarId", properties.defaultCalendarName());
         calendarService.deleteEvent(tenantId, calendarId, eventId).toFuture().get(30, TimeUnit.SECONDS);
         return McpToolResult.success(toJson(Map.of("success", true, "deleted", true, "eventId", eventId)));
@@ -170,17 +178,17 @@ public class CalendarMcpToolProvider implements McpToolProvider {
         return McpToolResult.success(toJson(Map.of("success", true, "slots", slots, "count", slots.size())));
     }
 
-    private McpToolResult handleListCalendars(Map<String, Object> args) throws Exception {
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+    private McpToolResult handleListCalendars(Map<String, Object> args, TenantContext tenant) throws Exception {
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         List<CalendarInfo> calendars = calendarService.listCalendars(tenantId)
                 .collectList().toFuture().get(30, TimeUnit.SECONDS);
         return McpToolResult.success(toJson(Map.of("success", true, "calendars", calendars, "count", calendars.size())));
     }
 
-    private McpToolResult handleCreateCalendar(Map<String, Object> args) throws Exception {
+    private McpToolResult handleCreateCalendar(Map<String, Object> args, TenantContext tenant) throws Exception {
         String calendarId = requireString(args, "calendarId");
         String name = requireString(args, "name");
-        String tenantId = stringOrDefault(args, "tenantId", properties.defaultTenantId());
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", properties.defaultTenantId());
         CalendarInfo calendar = CalendarInfo.builder()
                 .id(calendarId).tenantId(tenantId).name(name)
                 .description(stringOrDefault(args, "description", ""))

@@ -405,6 +405,42 @@ class MessagingMcpToolProviderSpec extends Specification {
         result.content().contains("Missing required parameter")
     }
 
+    // ── SEV-005: defense-in-depth for tenant propagation ──
+
+    def "execute() sets TenantContextHolder for the duration of the call and restores it (SEV-005)"() {
+        given:
+        provider = createProvider()
+        def outer = new io.jaiclaw.core.tenant.DefaultTenantContext("outer-tenant", "outer")
+        def inner = new io.jaiclaw.core.tenant.DefaultTenantContext("inner-tenant", "inner")
+        io.jaiclaw.core.tenant.TenantContextHolder.set(outer)
+        def observedInsideCall = new String[1]
+
+        and:
+        sessionManager.listSessions() >> {
+            observedInsideCall[0] = io.jaiclaw.core.tenant.TenantContextHolder.get()?.getTenantId()
+            return []
+        }
+
+        when:
+        provider.execute("list_sessions", [:], inner)
+
+        then:
+        observedInsideCall[0] == "inner-tenant"
+        io.jaiclaw.core.tenant.TenantContextHolder.get()?.getTenantId() == "outer-tenant"
+
+        cleanup:
+        io.jaiclaw.core.tenant.TenantContextHolder.clear()
+    }
+
+    @spock.lang.PendingFeature(reason = "SEV-005b: broadcast_message needs per-recipient tenant validation — deferred to a follow-up PR pending channel-registry design changes")
+    def "broadcast_message must not accept recipients from other tenants (SEV-005b, deferred)"() {
+        // This test intentionally fails until the recipient-tenant lookup is
+        // designed. Its presence documents the gap. Remove @PendingFeature
+        // when the fix lands.
+        expect:
+        false
+    }
+
     // ── helpers ──
 
     private ChannelAdapter mockAdapter(String id, String name, boolean running, boolean streaming) {

@@ -64,8 +64,13 @@ public record PipelineDefinition(
      * Backward-compatible 12-arg constructor — omits {@code resultTemplate},
      * which defaults to {@code null}. Retained so existing YAML mapper
      * fixtures and external callers compile unchanged.
+     *
+     * <p>Private so Spring Boot 4's record binder sees only the canonical
+     * 13-arg constructor and does not confuse the two. Groovy tests may still
+     * invoke this via reflection.
      */
-    public PipelineDefinition(String id, String name, String description,
+    @SuppressWarnings("unused")
+    private PipelineDefinition(String id, String name, String description,
                               List<String> tenantIds, boolean enabled,
                               TriggerDefinition trigger, ErrorStrategy errorStrategy,
                               int maxRetries, String deadLetterUri,

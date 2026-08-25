@@ -7,14 +7,22 @@ import spock.lang.Specification
 
 class GdprAuthzExpressionsSpec extends Specification {
 
-    GdprAuthzProperties.Roles defaultRoles = GdprAuthzProperties.Roles.DEFAULT
-    GdprAuthzExpressions authz = new GdprAuthzExpressions(defaultRoles)
+    // Explicitly-configured role for tests that exercise real gating.
+    // (DEFAULT is now blank so backward-compat with api-key deployments
+    // is preserved after @EnableMethodSecurity was turned on.)
+    GdprAuthzProperties.Roles configuredRoles = new GdprAuthzProperties.Roles("GDPR_OPERATOR")
+    GdprAuthzExpressions authz = new GdprAuthzExpressions(configuredRoles)
 
     def cleanup() {
         SecurityContextHolder.clearContext()
     }
 
-    def "unauthenticated principal is denied on operator()"() {
+    def "DEFAULT operator role is blank (backward compat with api-key principals)"() {
+        expect:
+        GdprAuthzProperties.Roles.DEFAULT.operator() == ""
+    }
+
+    def "unauthenticated principal is denied on operator() when a role is configured"() {
         expect:
         !authz.operator()
     }
@@ -60,14 +68,14 @@ class GdprAuthzExpressionsSpec extends Specification {
         permissive.operator()
     }
 
-    def "null roles fall back to DEFAULT (GDPR_OPERATOR)"() {
+    def "null roles fall back to blank DEFAULT (any authenticated caller passes)"() {
         given:
         GdprAuthzExpressions withNull = new GdprAuthzExpressions(null)
         SecurityContextHolder.context.authentication = new UsernamePasswordAuthenticationToken(
                 "alice", "n/a",
-                [new SimpleGrantedAuthority("GDPR_OPERATOR")])
+                [new SimpleGrantedAuthority("SOMETHING_ELSE")])
 
         expect:
-        withNull.operator()
+        withNull.operator()  // blank DEFAULT short-circuits to true
     }
 }

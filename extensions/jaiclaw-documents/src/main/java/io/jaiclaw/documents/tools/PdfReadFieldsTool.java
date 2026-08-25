@@ -9,6 +9,7 @@ import io.jaiclaw.documents.PdfFormField;
 import io.jaiclaw.documents.PdfFormReader;
 import io.jaiclaw.tools.ToolCatalog;
 import io.jaiclaw.tools.builtin.AbstractBuiltinTool;
+import io.jaiclaw.tools.exec.WorkspaceBoundary;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,20 +32,29 @@ public class PdfReadFieldsTool extends AbstractBuiltinTool {
               "properties": {
                 "path": {
                   "type": "string",
-                  "description": "Absolute path to the PDF file to inspect"
+                  "description": "Path to the PDF file to inspect, relative to the workspace directory (absolute paths outside the workspace are rejected when the workspace boundary is enforced)"
                 }
               },
               "required": ["path"]
             }""";
 
     private final PdfFormReader pdfFormReader;
+    private final boolean enforceWorkspaceBoundary;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public PdfReadFieldsTool() {
-        this(new PdfFormReader());
+        this(new PdfFormReader(), true);
+    }
+
+    public PdfReadFieldsTool(boolean enforceWorkspaceBoundary) {
+        this(new PdfFormReader(), enforceWorkspaceBoundary);
     }
 
     public PdfReadFieldsTool(PdfFormReader pdfFormReader) {
+        this(pdfFormReader, true);
+    }
+
+    public PdfReadFieldsTool(PdfFormReader pdfFormReader, boolean enforceWorkspaceBoundary) {
         super(new ToolDefinition(
                 "pdf_read_fields",
                 "Read a PDF form's fillable fields and return their metadata (name, type, current value, valid options).",
@@ -53,12 +63,18 @@ public class PdfReadFieldsTool extends AbstractBuiltinTool {
                 Set.of(ToolProfile.CODING, ToolProfile.FULL)
         ));
         this.pdfFormReader = pdfFormReader;
+        this.enforceWorkspaceBoundary = enforceWorkspaceBoundary;
     }
 
     @Override
     protected ToolResult doExecute(Map<String, Object> parameters, ToolContext context) throws Exception {
         String pathStr = requireParam(parameters, "path");
-        Path pdfPath = Path.of(pathStr);
+        Path pdfPath;
+        if (enforceWorkspaceBoundary) {
+            pdfPath = WorkspaceBoundary.resolve(context.workspaceDir(), pathStr);
+        } else {
+            pdfPath = Path.of(pathStr);
+        }
 
         if (!Files.exists(pdfPath)) {
             return new ToolResult.Error("File not found: " + pathStr);

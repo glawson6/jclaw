@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,10 +60,10 @@ import java.util.UUID;
  * <tr><td>{@code GET /drafts/{id}/variables?stage=X}</td><td>template variables at stage X (B12)</td></tr>
  * </table>
  *
- * <p>Authorization: none in Phase 1. Every endpoint delegates to the
- * app's Spring Security chain. Phase 3 adds role-gated method
- * annotations + a UI-origin URI-scheme allowlist enforced by the
- * validator.
+ * <p>Authorization: {@code viewer()} for read endpoints, {@code author()}
+ * for write endpoints (mutations to drafts). Role names configurable via
+ * {@link PipelineAuthoringProperties.Roles}; defaults are blank so any
+ * authenticated caller passes until an adopter opts into role-based gating.
  */
 @RestController
 @RequestMapping("/api/pipeline-studio")
@@ -89,11 +90,13 @@ public class PipelineStudioController {
     // ── drafts CRUD ─────────────────────────────────
 
     @GetMapping("/drafts")
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public List<PipelineDraft> listDrafts() {
         return draftStore.findAll();
     }
 
     @GetMapping("/drafts/{id}")
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public ResponseEntity<PipelineDraft> getDraft(@PathVariable String id) {
         return draftStore.find(id)
                 .map(ResponseEntity::ok)
@@ -101,6 +104,7 @@ public class PipelineStudioController {
     }
 
     @PostMapping("/drafts")
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public ResponseEntity<?> createDraft(@RequestBody PipelineDefinition definition) {
         if (definition == null || definition.id() == null || definition.id().isBlank()) {
             return ResponseEntity.badRequest()
@@ -125,6 +129,7 @@ public class PipelineStudioController {
     }
 
     @PutMapping("/drafts/{id}")
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public ResponseEntity<?> updateDraft(@PathVariable String id,
                                           @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                           @RequestBody PipelineDefinition definition) {
@@ -154,6 +159,7 @@ public class PipelineStudioController {
     }
 
     @DeleteMapping("/drafts/{id}")
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public ResponseEntity<Void> deleteDraft(@PathVariable String id) {
         draftStore.delete(id);
         return ResponseEntity.noContent().build();
@@ -162,6 +168,7 @@ public class PipelineStudioController {
     // ── validate ────────────────────────────────────
 
     @PostMapping("/drafts/{id}/validate")
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public ResponseEntity<?> validateDraft(@PathVariable String id) {
         Optional<PipelineDraft> draft = draftStore.find(id);
         if (draft.isEmpty()) return ResponseEntity.notFound().build();
@@ -170,6 +177,7 @@ public class PipelineStudioController {
     }
 
     @PostMapping("/validate")
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public Map<String, Object> validateAnonymous(@RequestBody PipelineDefinition definition) {
         return toReportJson(validator.validate(definition));
     }
@@ -202,11 +210,13 @@ public class PipelineStudioController {
     // ── catalog + schema ────────────────────────────
 
     @GetMapping("/catalog")
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public Map<String, Object> catalog() {
         return catalogService.catalog();
     }
 
     @GetMapping(value = "/schema", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public ResponseEntity<Resource> schema() {
         if (!schemaResource.exists()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -219,6 +229,7 @@ public class PipelineStudioController {
     // ── YAML round-trip ─────────────────────────────
 
     @GetMapping(value = "/drafts/{id}/yaml", produces = "application/x-yaml")
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public ResponseEntity<String> exportYaml(@PathVariable String id) {
         Optional<PipelineDraft> draft = draftStore.find(id);
         if (draft.isEmpty()) return ResponseEntity.notFound().build();
@@ -234,6 +245,7 @@ public class PipelineStudioController {
     }
 
     @PostMapping(value = "/import", consumes = {"application/x-yaml", "text/yaml", "text/plain"})
+    @PreAuthorize("@pipelineAuthzExpressions.author()")
     public ResponseEntity<?> importYaml(@RequestBody String yamlBody,
                                          @RequestParam(value = "id", required = false) String requestedId) {
         try {
@@ -263,6 +275,7 @@ public class PipelineStudioController {
     // ── template variables ──────────────────────────
 
     @GetMapping("/drafts/{id}/variables")
+    @PreAuthorize("@pipelineAuthzExpressions.viewer()")
     public ResponseEntity<?> variables(@PathVariable String id,
                                         @RequestParam(value = "stage", required = false) String stage) {
         Optional<PipelineDraft> draft = draftStore.find(id);

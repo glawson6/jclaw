@@ -9,6 +9,7 @@ import io.jaiclaw.documents.PdfFormFiller;
 import io.jaiclaw.documents.PdfFormResult;
 import io.jaiclaw.tools.ToolCatalog;
 import io.jaiclaw.tools.builtin.AbstractBuiltinTool;
+import io.jaiclaw.tools.exec.WorkspaceBoundary;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,11 +38,11 @@ public class PdfFillFormTool extends AbstractBuiltinTool {
               "properties": {
                 "templatePath": {
                   "type": "string",
-                  "description": "Absolute path to the PDF template file"
+                  "description": "Path to the PDF template file, relative to the workspace directory (absolute paths outside the workspace are rejected when the workspace boundary is enforced)"
                 },
                 "outputPath": {
                   "type": "string",
-                  "description": "Absolute path where the filled PDF should be written"
+                  "description": "Path where the filled PDF should be written, relative to the workspace directory (absolute paths outside the workspace are rejected when the workspace boundary is enforced)"
                 },
                 "fields": {
                   "type": "object",
@@ -56,9 +57,14 @@ public class PdfFillFormTool extends AbstractBuiltinTool {
               "required": ["templatePath", "outputPath", "fields"]
             }""";
 
+    private final boolean enforceWorkspaceBoundary;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public PdfFillFormTool() {
+        this(true);
+    }
+
+    public PdfFillFormTool(boolean enforceWorkspaceBoundary) {
         super(new ToolDefinition(
                 "pdf_fill_form",
                 "Fill a PDF form with field values and write the result to a file. Returns a summary of filled, skipped, and output path.",
@@ -66,6 +72,7 @@ public class PdfFillFormTool extends AbstractBuiltinTool {
                 INPUT_SCHEMA,
                 Set.of(ToolProfile.CODING, ToolProfile.FULL)
         ));
+        this.enforceWorkspaceBoundary = enforceWorkspaceBoundary;
     }
 
     @Override
@@ -88,7 +95,12 @@ public class PdfFillFormTool extends AbstractBuiltinTool {
             }
         }
 
-        Path templatePath = Path.of(templatePathStr);
+        Path templatePath;
+        if (enforceWorkspaceBoundary) {
+            templatePath = WorkspaceBoundary.resolve(context.workspaceDir(), templatePathStr);
+        } else {
+            templatePath = Path.of(templatePathStr);
+        }
         if (!Files.exists(templatePath)) {
             return new ToolResult.Error("Template file not found: " + templatePathStr);
         }
@@ -111,7 +123,12 @@ public class PdfFillFormTool extends AbstractBuiltinTool {
         PdfFormResult result = filler.fill(templateBytes, fieldValues);
 
         if (result instanceof PdfFormResult.Success success) {
-            Path outputPath = Path.of(outputPathStr);
+            Path outputPath;
+            if (enforceWorkspaceBoundary) {
+                outputPath = WorkspaceBoundary.resolve(context.workspaceDir(), outputPathStr);
+            } else {
+                outputPath = Path.of(outputPathStr);
+            }
             Files.createDirectories(outputPath.getParent());
             Files.write(outputPath, success.pdfBytes());
 

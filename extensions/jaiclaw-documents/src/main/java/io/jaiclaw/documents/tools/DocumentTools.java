@@ -12,14 +12,29 @@ public final class DocumentTools {
 
     private DocumentTools() {}
 
+    /**
+     * @return the built-in document tools with workspace-boundary enforcement enabled.
+     */
     public static List<ToolCallback> all() {
+        return all(true);
+    }
+
+    /**
+     * @param enforceWorkspaceBoundary when true, PDF tools reject paths that escape
+     *                                 {@link io.jaiclaw.core.tool.ToolContext#workspaceDir()}.
+     */
+    public static List<ToolCallback> all(boolean enforceWorkspaceBoundary) {
         return List.of(
-                new PdfReadFieldsTool(),
-                new PdfFillFormTool()
+                new PdfReadFieldsTool(enforceWorkspaceBoundary),
+                new PdfFillFormTool(enforceWorkspaceBoundary)
         );
     }
 
     public static void registerAll(ToolRegistry registry) {
-        registry.registerAll(all());
+        registerAll(registry, true);
+    }
+
+    public static void registerAll(ToolRegistry registry, boolean enforceWorkspaceBoundary) {
+        registry.registerAll(all(enforceWorkspaceBoundary));
     }
 }

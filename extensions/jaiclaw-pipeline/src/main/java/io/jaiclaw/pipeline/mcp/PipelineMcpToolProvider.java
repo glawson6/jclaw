@@ -3,6 +3,8 @@ package io.jaiclaw.pipeline.mcp;
 import io.jaiclaw.core.mcp.McpToolDefinition;
 import io.jaiclaw.core.mcp.McpToolProvider;
 import io.jaiclaw.core.mcp.McpToolResult;
+import io.jaiclaw.core.tenant.CrossTenantAccessException;
+import io.jaiclaw.core.tenant.TenantArgResolver;
 import io.jaiclaw.core.tenant.TenantContext;
 import io.jaiclaw.core.tenant.TenantContextHolder;
 import io.jaiclaw.pipeline.PipelineDefinition;
@@ -121,26 +123,24 @@ public class PipelineMcpToolProvider implements McpToolProvider {
 
     @Override
     public McpToolResult execute(String toolName, Map<String, Object> args, TenantContext tenant) {
-        if (tenant != null) {
-            TenantContextHolder.set(tenant);
-        }
-        try {
-            return switch (toolName) {
-                case "pipeline_list" -> handleList();
-                case "pipeline_trigger" -> handleTrigger(args);
-                case "pipeline_trigger_sync" -> handleTriggerSync(args);
-                case "pipeline_status" -> handleStatus(args);
-                case "pipeline_render" -> handleRender(args);
-                default -> McpToolResult.error("Unknown tool: " + toolName);
-            };
-        } catch (Exception e) {
-            log.warn("MCP tool '{}' failed: {}", toolName, e.toString());
-            return McpToolResult.error("Tool '" + toolName + "' failed: " + e.getMessage());
-        } finally {
-            if (tenant != null) {
-                TenantContextHolder.clear();
+        return TenantContextHolder.withTenant(tenant, () -> {
+            try {
+                return switch (toolName) {
+                    case "pipeline_list" -> handleList();
+                    case "pipeline_trigger" -> handleTrigger(args, tenant);
+                    case "pipeline_trigger_sync" -> handleTriggerSync(args, tenant);
+                    case "pipeline_status" -> handleStatus(args);
+                    case "pipeline_render" -> handleRender(args);
+                    default -> McpToolResult.error("Unknown tool: " + toolName);
+                };
+            } catch (CrossTenantAccessException e) {
+                log.warn("MCP tool '{}' rejected: {}", toolName, e.getMessage());
+                return McpToolResult.error("cross-tenant access denied");
+            } catch (Exception e) {
+                log.warn("MCP tool '{}' failed: {}", toolName, e.toString());
+                return McpToolResult.error("Tool '" + toolName + "' failed: " + e.getMessage());
             }
-        }
+        });
     }
 
     // --- tool handlers ---
@@ -167,10 +167,10 @@ public class PipelineMcpToolProvider implements McpToolProvider {
         return McpToolResult.success(JSON.writeValueAsString(payload));
     }
 
-    private McpToolResult handleTrigger(Map<String, Object> args) throws Exception {
+    private McpToolResult handleTrigger(Map<String, Object> args, TenantContext tenant) throws Exception {
         String pipelineId = requireString(args, "pipelineId");
         String input = optionalString(args, "input", "");
-        String tenantId = optionalString(args, "tenantId", null);
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", null);
         String correlationId = optionalString(args, "correlationId", null);
 
         PipelineExecutionHandle handle;
@@ -189,10 +189,10 @@ public class PipelineMcpToolProvider implements McpToolProvider {
         return McpToolResult.success(JSON.writeValueAsString(body));
     }
 
-    private McpToolResult handleTriggerSync(Map<String, Object> args) throws Exception {
+    private McpToolResult handleTriggerSync(Map<String, Object> args, TenantContext tenant) throws Exception {
         String pipelineId = requireString(args, "pipelineId");
         String input = optionalString(args, "input", "");
-        String tenantId = optionalString(args, "tenantId", null);
+        String tenantId = TenantArgResolver.resolveOrValidate(tenant, args, "tenantId", null);
         String correlationId = optionalString(args, "correlationId", null);
         int timeoutSeconds = optionalInt(args, "timeoutSeconds", 30);
         if (timeoutSeconds <= 0) timeoutSeconds = 30;

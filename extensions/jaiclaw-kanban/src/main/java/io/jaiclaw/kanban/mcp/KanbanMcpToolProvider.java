@@ -7,6 +7,7 @@ import io.jaiclaw.core.mcp.McpToolDefinition;
 import io.jaiclaw.core.mcp.McpToolProvider;
 import io.jaiclaw.core.mcp.McpToolResult;
 import io.jaiclaw.core.tenant.TenantContext;
+import io.jaiclaw.core.tenant.TenantContextHolder;
 import io.jaiclaw.kanban.model.BoardDefinition;
 import io.jaiclaw.kanban.model.BoardSnapshot;
 import io.jaiclaw.kanban.render.AsciiBoardOptions;
@@ -100,19 +101,21 @@ public class KanbanMcpToolProvider implements McpToolProvider {
 
     @Override
     public McpToolResult execute(String toolName, Map<String, Object> args, TenantContext tenant) {
-        try {
-            return switch (toolName) {
-                case "board_list"  -> handleBoardList(args);
-                case "board_show"  -> handleBoardShow(args);
-                case "board_ascii" -> handleBoardAscii(args);
-                case "task_move"   -> handleTaskMove(args);
-                case "task_claim"  -> handleTaskClaim(args);
-                default -> McpToolResult.error("Unknown tool: " + toolName);
-            };
-        } catch (Exception e) {
-            log.error("MCP tool execution failed: {}", toolName, e);
-            return McpToolResult.error("Tool execution failed: " + e.getMessage());
-        }
+        return TenantContextHolder.withTenant(tenant, () -> {
+            try {
+                return switch (toolName) {
+                    case "board_list"  -> handleBoardList(args);
+                    case "board_show"  -> handleBoardShow(args);
+                    case "board_ascii" -> handleBoardAscii(args);
+                    case "task_move"   -> handleTaskMove(args);
+                    case "task_claim"  -> handleTaskClaim(args);
+                    default -> McpToolResult.error("Unknown tool: " + toolName);
+                };
+            } catch (Exception e) {
+                log.error("MCP tool execution failed: {}", toolName, e);
+                return McpToolResult.error("Tool execution failed: " + e.getMessage());
+            }
+        });
     }
 
     // ── handlers ────────────────────────────────────────────────────

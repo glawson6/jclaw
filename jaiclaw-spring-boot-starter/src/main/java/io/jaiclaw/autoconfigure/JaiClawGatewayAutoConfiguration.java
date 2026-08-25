@@ -288,6 +288,7 @@ public class JaiClawGatewayAutoConfiguration {
      */
     @Configuration
     @ConditionalOnProperty(name = "jaiclaw.admin.enabled", havingValue = "true", matchIfMissing = false)
+    @EnableConfigurationProperties(io.jaiclaw.gateway.admin.AdminAuthzProperties.class)
     static class AdminConfiguration {
 
         @Bean
@@ -298,6 +299,18 @@ public class JaiClawGatewayAutoConfiguration {
                 io.jaiclaw.tools.ToolRegistry toolRegistry) {
             return new io.jaiclaw.gateway.admin.AdminController(
                     sessionManager, channelRegistry, toolRegistry);
+        }
+
+        /**
+         * Bean referenced by {@code @PreAuthorize("@adminAuthzExpressions.admin()")}
+         * on {@link io.jaiclaw.gateway.admin.AdminController}. The bean name
+         * must match the SpEL expression exactly.
+         */
+        @Bean("adminAuthzExpressions")
+        @ConditionalOnMissingBean
+        public io.jaiclaw.gateway.admin.AdminAuthzExpressions adminAuthzExpressions(
+                io.jaiclaw.gateway.admin.AdminAuthzProperties properties) {
+            return new io.jaiclaw.gateway.admin.AdminAuthzExpressions(properties.roles());
         }
     }
 }

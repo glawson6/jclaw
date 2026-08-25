@@ -71,31 +71,26 @@ public class MessagingMcpToolProvider implements McpToolProvider {
 
     @Override
     public McpToolResult execute(String toolName, Map<String, Object> args, TenantContext tenant) {
-        if (tenant != null) {
-            TenantContextHolder.set(tenant);
-        }
-        try {
-            return switch (toolName) {
-                case "list_channels" -> handleListChannels(args);
-                case "send_message" -> handleSendMessage(args);
-                case "get_channel_status" -> handleGetChannelStatus(args);
-                case "list_sessions" -> handleListSessions(args);
-                case "get_conversation" -> handleGetConversation(args);
-                case "broadcast_message" -> handleBroadcastMessage(args);
-                case "agent_chat" -> handleAgentChat(args);
-                case "agent_chat_async" -> handleAgentChatAsync(args);
-                default -> McpToolResult.error("Unknown tool: " + toolName);
-            };
-        } catch (IllegalArgumentException e) {
-            return McpToolResult.error("Missing required parameter: " + e.getMessage());
-        } catch (Exception e) {
-            log.error("MCP tool execution failed: {}", toolName, e);
-            return McpToolResult.error("Tool execution failed: " + e.getMessage());
-        } finally {
-            if (tenant != null) {
-                TenantContextHolder.clear();
+        return TenantContextHolder.withTenant(tenant, () -> {
+            try {
+                return switch (toolName) {
+                    case "list_channels" -> handleListChannels(args);
+                    case "send_message" -> handleSendMessage(args);
+                    case "get_channel_status" -> handleGetChannelStatus(args);
+                    case "list_sessions" -> handleListSessions(args);
+                    case "get_conversation" -> handleGetConversation(args);
+                    case "broadcast_message" -> handleBroadcastMessage(args);
+                    case "agent_chat" -> handleAgentChat(args);
+                    case "agent_chat_async" -> handleAgentChatAsync(args);
+                    default -> McpToolResult.error("Unknown tool: " + toolName);
+                };
+            } catch (IllegalArgumentException e) {
+                return McpToolResult.error("Missing required parameter: " + e.getMessage());
+            } catch (Exception e) {
+                log.error("MCP tool execution failed: {}", toolName, e);
+                return McpToolResult.error("Tool execution failed: " + e.getMessage());
             }
-        }
+        });
     }
 
     // ── Raw channel tools ──
